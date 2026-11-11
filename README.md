@@ -50,6 +50,17 @@ python -m reconciler.cli reconcile examples/asbuilt_FX-2231.reference.json \
 
 `corrections.csv` is the work list for whoever fixes the GIS: record, field, old value, new value, action.
 
+## Use your own data
+
+In the demo, drop files onto the page:
+
+- **As-built:** closeout notes as `.txt` or a text-based `.pdf`, or a records `.json` written by the `extract` command.
+- **Inventory:** cables as `.geojson` (properties `cable_id`, `fiber_count`, `from_struct`, `to_struct`, `length_ft`, `placement`) and splices as `.csv` (`closure_id, structure, backbone_cable, bb_start, bb_end, branch_cable, br_start, br_end`).
+
+Files are read in the browser and are not stored. Notes are sent to Claude only when you press Extract. Do not load records you are not allowed to share.
+
+The same files work on the command line, as shown above.
+
 ## Where the AI is, and where it isn't
 
 Foremen do not write to a schema. One line says "144ct", the next says "144F". A length shows up as two sheath marks. A cancelled lateral is half a sentence. A model reads that well, and writing a parser for it is a losing fight.

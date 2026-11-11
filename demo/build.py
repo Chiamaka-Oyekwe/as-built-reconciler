@@ -18,6 +18,9 @@ html = html.replace("/*__REFERENCE__*/", js(json.loads((ex / "asbuilt_FX-2231.re
 html = html.replace("/*__INVENTORY__*/", js(load_inventory(ex / "inventory_FX-2231.geojson", ex / "inventory_splices_FX-2231.csv")))
 html = html.replace("/*__PROMPT__*/", js(PROMPT))
 html = html.replace("/*__LOGIC__*/", (HERE / "logic.js").read_text().split("if (typeof module")[0])
+html = html.replace("/*__PDFJS__*/", js({
+    "lib": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+    "worker": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"}))
 html = html.replace("/*__REPO__*/", REPO)
 (HERE / "index.html").write_text(html)
 print(f"wrote demo/index.html ({len(html):,} bytes)")

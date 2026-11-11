@@ -143,6 +143,25 @@ button:disabled { opacity: 0.55; cursor: progress; }
 }
 @media (prefers-reduced-motion: reduce) { .strip.draw .reveal-rect { animation: none; } }
 
+.strip-wrap { background-color: #0e1011; background-image: linear-gradient(#ffffff0a 1px, transparent 1px), linear-gradient(90deg, #ffffff0a 1px, transparent 1px); background-size: 40px 40px; border-radius: 4px; }
+.strip .flag { cursor: pointer; } .strip .flag circle { transition: r .15s ease; }
+.strip .flag.hot circle { r: 13; stroke: #fff; stroke-width: 2; }
+.strip .flag:focus-visible circle { stroke: #fff; stroke-width: 2.5; }
+.find { transition: box-shadow .15s ease, transform .15s ease; scroll-margin-top: 16px; }
+.find.hot { box-shadow: 0 0 0 2px var(--tone), 0 10px 22px -14px rgba(0,0,0,.55); transform: translateX(3px); }
+.sevbar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--line); }
+.sevbar i { display: block; height: 100%; } .sevbar .h { background: var(--bad); } .sevbar .m { background: var(--warn); } .sevbar .l { background: var(--muted); }
+.sevkey { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 600 11px/1.4 var(--mono); color: var(--muted); letter-spacing: 0.04em; }
+.sevkey b { color: var(--ink); }
+.diff { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 9px; font: 400 12px/1.4 var(--mono); }
+.diff .was { padding: 4px 8px; border-radius: 3px; background: var(--sheet); border: 1px solid var(--line); color: var(--muted); text-decoration: line-through; text-decoration-color: var(--bad); }
+.diff .now { padding: 4px 8px; border-radius: 3px; background: var(--good-bg); color: var(--good); font-weight: 600; border: 1px solid transparent; }
+.diff .tag { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.diff .arrow { color: var(--muted); }
+.stepnum { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--sheet); font: 700 12px/1 var(--mono); margin-right: 8px; vertical-align: 3px; }
+tr:nth-child(even) td { background: color-mix(in srgb, var(--paper) 45%, transparent); }
+.panel { box-shadow: 0 1px 0 rgba(0,0,0,.03), 0 14px 30px -26px rgba(0,0,0,.5); }
+@media (prefers-reduced-motion: reduce) { .find, .strip .flag circle { transition: none; } }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 22px; font: 400 11.5px/1.4 var(--mono); color: var(--road-muted); }
 .legend i { display: inline-block; width: 26px; height: 0; border-top: 3px solid var(--fiber); vertical-align: middle; margin-right: 8px; }
 .legend i.lat { border-top-color: var(--lane); } .legend i.ghost { border-top: 2px dashed #7d8279; }
@@ -168,6 +187,8 @@ tr.nb td { color: var(--muted); text-decoration: line-through; }
 pre.csv { margin: 0; font: 400 12px/1.6 var(--mono); background: var(--paper); border: 1px solid var(--line); padding: 12px; overflow-x: auto; max-height: 220px; }
 input[type=range] { width: 100%; accent-color: var(--fiber); }
 .status { font-size: 13px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 10px; }
+.fmt { font-size: 13px; color: var(--muted); } .fmt summary { cursor: pointer; font-weight: 600; color: var(--ink); } .fmt p { margin-top: 8px; }
+code { font: 400 12px/1.4 var(--mono); background: var(--paper); padding: 1px 4px; border-radius: 2px; }
 .status.live { border-left-color: var(--good); color: var(--ink); } .status.err { border-left-color: var(--bad); color: var(--ink); }
 </style>
 </head>
@@ -188,9 +209,9 @@ input[type=range] { width: 100%; accent-color: var(--fiber); }
       </div>
     </div>
     <div class="strip-wrap">
-      <svg class="strip" id="strip" viewBox="0 0 1000 272" role="img" aria-labelledby="strip-title">
+      <svg class="strip" id="strip" viewBox="0 0 1000 286" role="img" aria-labelledby="strip-title">
         <title id="strip-title">Straight-line diagram of the route as built, with flags where the inventory disagrees</title>
-        <defs><clipPath id="reveal"><rect class="reveal-rect" x="0" y="0" width="1000" height="272"/></clipPath></defs>
+        <defs><clipPath id="reveal"><rect class="reveal-rect" x="0" y="0" width="1000" height="286"/></clipPath></defs>
         <g id="strip-g"></g>
       </svg>
     </div>
@@ -205,22 +226,42 @@ input[type=range] { width: 100%; accent-color: var(--fiber); }
 
 <div class="wrap">
   <form class="panel rail" id="controls" autocomplete="off">
-    <div class="kicker">Step 1</div>
-    <h2>Closeout notes</h2>
+    <h2><span class="stepnum">1</span>Closeout notes</h2>
+    <div class="drop" id="drop-notes">
+      <b>Drop your as-built here</b>
+      <span>Closeout notes as .txt or .pdf, or records already extracted as .json.</span>
+      <div class="row"><button type="button" id="pick-notes">Choose a file</button></div>
+      <input type="file" id="notes-input" accept=".txt,.pdf,.json,text/plain,application/pdf,application/json" hidden>
+    </div>
     <label class="f">What the foreman wrote
-      <textarea id="notes" rows="15" spellcheck="false"></textarea>
+      <textarea id="notes" rows="13" spellcheck="false"></textarea>
     </label>
     <div class="row">
       <button type="button" class="primary ai" id="run" hidden>Extract with Claude</button>
       <button type="button" class="ai" id="useref" hidden>Use the answer key</button>
     </div>
     <p class="status" id="status"></p>
-    <div class="kicker" style="margin-top:6px">Step 2</div>
-    <h2>Compare</h2>
+    <h2 style="margin-top:8px"><span class="stepnum">2</span>GIS inventory</h2>
     <label class="f">Length tolerance: <span id="tol-out"></span>
       <input type="range" id="tol" min="1" max="15" step="1" value="5">
     </label>
-    <p class="note" id="inv-note"></p>
+    <div class="drop" id="drop-inv">
+      <b>Drop your GIS inventory here</b>
+      <span>Cables as .geojson and splices as .csv. Drop both at once or one at a time.</span>
+      <div class="row">
+        <button type="button" id="pick-inv">Choose files</button>
+        <button type="button" id="reset-all" hidden>Back to the sample project</button>
+      </div>
+      <input type="file" id="inv-input" accept=".geojson,.json,.csv,application/json,text/csv" multiple hidden>
+    </div>
+    <p class="status" id="inv-note"></p>
+    <details class="fmt">
+      <summary>File formats</summary>
+      <p><b>Cables (.geojson):</b> one feature per span, with properties <code>cable_id</code>, <code>fiber_count</code>, <code>from_struct</code>, <code>to_struct</code>, <code>length_ft</code>, <code>placement</code> (underground or aerial).</p>
+      <p><b>Splices (.csv):</b> columns <code>closure_id, structure, backbone_cable, bb_start, bb_end, branch_cable, br_start, br_end</code>.</p>
+      <p><b>Records (.json):</b> what the <code>extract</code> command writes. Sample files are in the repository's examples folder.</p>
+    </details>
+    <p class="note">Files are read in your browser and are not stored. Notes are sent to Claude only when you press Extract. Do not load records you are not allowed to share.</p>
   </form>
 
   <main class="results">
@@ -238,14 +279,15 @@ input[type=range] { width: 100%; accent-color: var(--fiber); }
       <pre class="csv" id="csv"></pre>
       <div class="row"><button type="button" id="copy">Copy as CSV</button><span class="note" id="copy-note"></span></div>
     </section>
-    <p class="note">A demonstration on a made-up project. The notes, the inventory and every name in them are synthetic. The records shown at first are the answer key I wrote by hand; with Claude available, the page reads the notes live and scores the result against that key. The comparison itself uses fixed rules and no model.</p>
+    <p class="note">A demonstration on a made-up project. The notes, the inventory and every name in them are synthetic. The records shown at first are the answer key I wrote by hand; with Claude available, the page reads the notes live and scores the result against that key. You can also load your own notes, records and inventory. The comparison itself uses fixed rules and no model.</p>
   </main>
 </div>
 
 <script>
 const NOTES = "AS-BUILT CLOSEOUT NOTES - PROJECT FX-2231 MAPLE AVE LATERALS\nContractor: Example Boring Co.    Foreman notes transcribed 10/28\n\n10/14 - Pulled 144ct backbone (CBL-144-01) HH-101 to HH-102 in existing 2\" duct. Sheath marks 0412 to 1096 = 684'\n10/14 - cont'd HH-102 > HH-103, 144F, 1,022 ft by sheath. UG.\n10/15 - HH-103 to HH-104: bored new 1.25\" HDPE, placed 144F. 1310' (plan showed 1180, had to go around gas reg station)\n10/16 - HH-104 to HH-105 144F 760 ft UG.\n10/17 - HH-105 to HH-106. Duct collapsed at RR spur. Went AERIAL on existing strand w/ permission, 144ct, 905'\n\nLaterals:\n L-01  12F  HH-102 to Bldg 110 Maple (MPOE)   240'  UG\n L-02  deferred, customer cancelled, NOT BUILT\n L-03  upsized to 24F per CO#2. HH-103 to Bldg 300 Maple. 315 ft UG\n L-04  12F. HH-104 was flooded, moved splice + lateral to HH-105. HH-105 to Bldg 410 Maple, 280' UG\n L-05  12ct ADDED per field change FC-07, HH-105 to Bldg 455 Maple 190 ft UG\n\nSplicing (J. Ortega 10/20-10/21):\n SC-102 @ HH-102: backbone fibers 1-12 spliced to L-01 1-12. 13-144 express.\n SC-103 @ HH-103: bb 13-36 to L-03 1-24. rest express\n SC-105 @ HH-105: bb 37-48 to L-04 1-12; bb 49-60 to L-05 1-12. remainder expressed thru\n\nOTDR all passed, see traces.\n";
 const REFERENCE = {"project": "FX-2231", "cables": [{"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-101", "to": "HH-102", "length_ft": 684, "placement": "underground", "status": "built"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-102", "to": "HH-103", "length_ft": 1022, "placement": "underground", "status": "built"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-103", "to": "HH-104", "length_ft": 1310, "placement": "underground", "status": "built"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-104", "to": "HH-105", "length_ft": 760, "placement": "underground", "status": "built"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-105", "to": "HH-106", "length_ft": 905, "placement": "aerial", "status": "built"}, {"cable_id": "L-01", "fiber_count": 12, "from": "HH-102", "to": "BLDG-110", "length_ft": 240, "placement": "underground", "status": "built"}, {"cable_id": "L-02", "fiber_count": null, "from": null, "to": null, "length_ft": null, "placement": null, "status": "not_built"}, {"cable_id": "L-03", "fiber_count": 24, "from": "HH-103", "to": "BLDG-300", "length_ft": 315, "placement": "underground", "status": "built"}, {"cable_id": "L-04", "fiber_count": 12, "from": "HH-105", "to": "BLDG-410", "length_ft": 280, "placement": "underground", "status": "built"}, {"cable_id": "L-05", "fiber_count": 12, "from": "HH-105", "to": "BLDG-455", "length_ft": 190, "placement": "underground", "status": "built"}], "splices": [{"closure_id": "SC-102", "structure": "HH-102", "backbone_cable": "CBL-144-01", "backbone_fibers": [1, 12], "branch_cable": "L-01", "branch_fibers": [1, 12]}, {"closure_id": "SC-103", "structure": "HH-103", "backbone_cable": "CBL-144-01", "backbone_fibers": [13, 36], "branch_cable": "L-03", "branch_fibers": [1, 24]}, {"closure_id": "SC-105", "structure": "HH-105", "backbone_cable": "CBL-144-01", "backbone_fibers": [37, 48], "branch_cable": "L-04", "branch_fibers": [1, 12]}, {"closure_id": "SC-105", "structure": "HH-105", "backbone_cable": "CBL-144-01", "backbone_fibers": [49, 60], "branch_cable": "L-05", "branch_fibers": [1, 12]}]};
-const INVENTORY = {"cables": [{"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-101", "to": "HH-102", "length_ft": 690, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-102", "to": "HH-103", "length_ft": 1015, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-103", "to": "HH-104", "length_ft": 1180, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-104", "to": "HH-105", "length_ft": 755, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-105", "to": "HH-106", "length_ft": 900, "placement": "underground"}, {"cable_id": "LAT-01", "fiber_count": 12, "from": "HH-102", "to": "BLDG-110", "length_ft": 240, "placement": "underground"}, {"cable_id": "L-02", "fiber_count": 12, "from": "HH-102", "to": "BLDG-220", "length_ft": 210, "placement": "underground"}, {"cable_id": "L-03", "fiber_count": 12, "from": "HH-103", "to": "BLDG-300", "length_ft": 310, "placement": "underground"}, {"cable_id": "L-04", "fiber_count": 12, "from": "HH-104", "to": "BLDG-410", "length_ft": 265, "placement": "underground"}], "splices": [{"closure_id": "SC-102", "structure": "HH-102", "backbone_cable": "CBL-144-01", "backbone_fibers": [1, 12], "branch_cable": "LAT-01", "branch_fibers": [1, 12]}, {"closure_id": "SC-103", "structure": "HH-103", "backbone_cable": "CBL-144-01", "backbone_fibers": [13, 24], "branch_cable": "L-03", "branch_fibers": [1, 12]}, {"closure_id": "SC-104", "structure": "HH-104", "backbone_cable": "CBL-144-01", "backbone_fibers": [25, 36], "branch_cable": "L-04", "branch_fibers": [1, 12]}]};
+const SAMPLE_INVENTORY = {"cables": [{"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-101", "to": "HH-102", "length_ft": 690, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-102", "to": "HH-103", "length_ft": 1015, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-103", "to": "HH-104", "length_ft": 1180, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-104", "to": "HH-105", "length_ft": 755, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-105", "to": "HH-106", "length_ft": 900, "placement": "underground"}, {"cable_id": "LAT-01", "fiber_count": 12, "from": "HH-102", "to": "BLDG-110", "length_ft": 240, "placement": "underground"}, {"cable_id": "L-02", "fiber_count": 12, "from": "HH-102", "to": "BLDG-220", "length_ft": 210, "placement": "underground"}, {"cable_id": "L-03", "fiber_count": 12, "from": "HH-103", "to": "BLDG-300", "length_ft": 310, "placement": "underground"}, {"cable_id": "L-04", "fiber_count": 12, "from": "HH-104", "to": "BLDG-410", "length_ft": 265, "placement": "underground"}], "splices": [{"closure_id": "SC-102", "structure": "HH-102", "backbone_cable": "CBL-144-01", "backbone_fibers": [1, 12], "branch_cable": "LAT-01", "branch_fibers": [1, 12]}, {"closure_id": "SC-103", "structure": "HH-103", "backbone_cable": "CBL-144-01", "backbone_fibers": [13, 24], "branch_cable": "L-03", "branch_fibers": [1, 12]}, {"closure_id": "SC-104", "structure": "HH-104", "backbone_cable": "CBL-144-01", "backbone_fibers": [25, 36], "branch_cable": "L-04", "branch_fibers": [1, 12]}]};
+const PDFJS = {"lib": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", "worker": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"};
 const PROMPT = "You are reading as-built closeout notes for a fiber construction project.\nPull out every cable segment and every splice. Use only what the notes say.\n\nReturn JSON only, in this shape:\n{\n  \"project\": \"<project number or null>\",\n  \"cables\": [{\"cable_id\": str, \"fiber_count\": int|null, \"from\": str|null, \"to\": str|null,\n              \"length_ft\": number|null, \"placement\": \"underground\"|\"aerial\"|null,\n              \"status\": \"built\"|\"not_built\"}],\n  \"splices\": [{\"closure_id\": str, \"structure\": str, \"backbone_cable\": str,\n               \"backbone_fibers\": [first, last], \"branch_cable\": str, \"branch_fibers\": [first, last]}]\n}\n\nRules:\n- One cable record per span between two structures. A backbone pulled through five handholes is four records with the same cable_id.\n- Write handholes as HH-<number> and buildings as BLDG-<street number>.\n- \"ct\" and \"F\" both mean fiber count. \"UG\" means underground.\n- If a length is given as sheath marks, subtract them. If the notes give a built length and a plan length, use the built length.\n- A cable the notes say was deferred, cancelled or not built gets status \"not_built\" and null for what is unknown.\n- If a cable was moved in the field, record where it was actually built.\n- \"bb\" means the backbone cable. Express or pass-through fibers are not splices; leave them out.\n- Fiber ranges are inclusive pairs, for example [13, 36].\n\nNotes:\n<notes>\n{notes}\n<\/notes>";
 // Same rules as reconciler/reconcile.py and evaluate.py, for the browser demo.
 const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
@@ -401,12 +443,21 @@ const NS = "http://www.w3.org/2000/svg";
 function S(tag, attrs, text) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text !== undefined) e.textContent = text; return e; }
 const SEV = { high: "#ff5a52", medium: "#e3b53a", low: "#8fb3c9" };
 const worst = (fs) => fs.length ? fs.slice().sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])[0].severity : null;
-let records = REFERENCE, firstDraw = true;
+let records = REFERENCE, inventory = SAMPLE_INVENTORY, hasClaude = false, firstDraw = true;
 
 function drawLine(rec, result) {
   const g = $("strip-g"); g.replaceChildren();
   const add = (parent, tag, attrs, text) => { const n = S(tag, attrs, text); parent.append(n); return n; };
-  const badge = (x, y, f) => { add(g, "circle", { cx: x, cy: y, r: 9.5, fill: SEV[f.severity], stroke: "#101213", "stroke-width": 1.5 }); add(g, "text", { x, y: y + 3.6, "text-anchor": "middle", class: "badge" }, String(f.n)); };
+  const flags = [];
+  const badge = (x, y, f) => flags.push([x, y, f]);
+  const paintFlags = () => flags.forEach(([x, y, f]) => {
+    const fg = add(g, "g", { class: "flag", "data-n": f.n, tabindex: 0, role: "button", "aria-label": "Finding " + f.n + ": " + f.record });
+    add(fg, "circle", { cx: x, cy: y, r: 10, fill: SEV[f.severity], stroke: "#101213", "stroke-width": 1.5 });
+    add(fg, "text", { x, y: y + 3.7, "text-anchor": "middle", class: "badge" }, String(f.n));
+    const go = () => { const t = document.getElementById("finding-" + f.n); if (t) { t.scrollIntoView({ behavior: "smooth", block: "center" }); hot(f.n, true); setTimeout(() => hot(f.n, false), 1600); } };
+    fg.addEventListener("click", go); fg.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    fg.addEventListener("mouseenter", () => hot(f.n, true)); fg.addEventListener("mouseleave", () => hot(f.n, false));
+  });
   const built = (rec.cables || []).filter((c) => c.status !== "not_built" && c.from && c.to).map((c) => Object.assign({}, c, { cable_id: norm(c.cable_id), from: norm(c.from), to: norm(c.to) }));
   const tally = {}; built.forEach((c) => { tally[c.cable_id] = (tally[c.cable_id] || 0) + 1; });
   const bb = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
@@ -420,7 +471,7 @@ function drawLine(rec, result) {
   }
   if (chain.length < 2) { add(g, "text", { x: 500, y: 125, "text-anchor": "middle" }, "NOT ENOUGH RECORDS TO DRAW THE ROUTE"); return; }
   const xs = {}; chain.forEach((s, k) => { xs[s] = 90 + k * (820 / (chain.length - 1)); });
-  const Y = 96, BY = 200, F = result.findings;
+  const Y = 104, BY = 212, F = result.findings;
   const same = (w, c) => (w.from === c.from && w.to === c.to) || (w.from === c.to && w.to === c.from);
   const r = add(g, "g", { "clip-path": "url(#reveal)" });
 
@@ -441,7 +492,7 @@ function drawLine(rec, result) {
   });
   F.forEach((f) => {
     if (f.where.inventory_only) { const node = xs[f.where.from] !== undefined ? f.where.from : f.where.to; if (xs[node] !== undefined) put(node, { ghost: true, far: node === f.where.from ? f.where.to : f.where.from, label: f.where.cable_id + " · GIS ONLY", fs: [f] }); }
-    if (f.code === "ENDPOINT") { const node = xs[f.where.inv_from] !== undefined ? f.where.inv_from : f.where.inv_to; if (xs[node] !== undefined) put(node, { ghost: true, far: "", label: f.where.cable_id + " · OLD GIS SPOT", fs: [] }); }
+    if (f.code === "ENDPOINT") { const node = xs[f.where.inv_from] !== undefined ? f.where.inv_from : f.where.inv_to; if (xs[node] !== undefined) put(node, { ghost: true, far: "", label: f.where.cable_id + " (GIS)", fs: [] }); }
   });
   Object.keys(byNode).forEach((node) => {
     const items = byNode[node], x = xs[node];
@@ -466,10 +517,15 @@ function drawLine(rec, result) {
     const fs = F.filter((f) => (f.code.startsWith("SPLICE") || f.code === "DOUBLE_ASSIGNED") && f.where.structure === s);
     fs.forEach((f, k) => badge(x + (k - (fs.length - 1) / 2) * 22, Y - 58, f));
   });
-  add(g, "text", { x: 14, y: 263, class: "faint" }, "STRAIGHT-LINE DIAGRAM · NOT TO SCALE · " + bb);
+  add(g, "text", { x: 14, y: 276, class: "faint" }, "STRAIGHT-LINE DIAGRAM · NOT TO SCALE · " + bb);
+  paintFlags();
   if (firstDraw) { $("strip").classList.add("draw"); firstDraw = false; }
 }
 
+function hot(n, on) {
+  document.querySelectorAll('.flag[data-n="' + n + '"]').forEach((e) => e.classList.toggle("hot", on));
+  const row = document.getElementById("finding-" + n); if (row) row.classList.toggle("hot", on);
+}
 function stat(kind, big, small) { const s = el("div", "stat " + kind); s.append(el("b", "", big), el("span", "", small)); return s; }
 function table(node, head, rows, cls) {
   node.replaceChildren();
@@ -480,7 +536,7 @@ function table(node, head, rows, cls) {
 function render() {
   const tol = Number($("tol").value);
   $("tol-out").textContent = tol + "%";
-  const result = reconcile(records, INVENTORY, tol / 100);
+  const result = reconcile(records, inventory, tol / 100);
   drawLine(records, result);
 
   const sum = $("summary"); sum.replaceChildren();
@@ -489,16 +545,25 @@ function render() {
   sum.append(stat("", String(result.cables_compared + result.splices_compared), result.cables_compared + " cable records and " + result.splices_compared + " splices matched and compared"));
 
   const box = $("findings"); box.replaceChildren();
-  const head = el("div", "head"); const hl = el("div"); hl.append(el("div", "kicker", "Project " + (records.project || "FX-2231")), el("h2", "", "Findings"));
+  const head = el("div", "head"); const hl = el("div"); hl.append(el("div", "kicker", records.project ? "Project " + records.project : "Your project"), el("h2", "", "Findings"));
   head.append(hl, el("p", "note", "Worst first. Numbers match the flags on the diagram.")); box.append(head);
   if (!result.findings.length) box.append(el("p", "note", "The inventory agrees with the as-built records."));
+  else {
+    const bar = el("div", "sevbar"), key = el("div", "sevkey"), tot = result.findings.length;
+    [["high", "h"], ["medium", "m"], ["low", "l"]].forEach(([sv, c]) => {
+      if (result.counts[sv]) { const i = el("i", c); i.style.width = (result.counts[sv] / tot * 100) + "%"; bar.append(i); }
+      const k = el("span"); k.append(el("b", "", String(result.counts[sv])), document.createTextNode(" " + sv)); key.append(k);
+    });
+    box.append(bar, key);
+  }
   const g = el("div", "group");
   for (const f of result.findings) {
-    const row = el("div", "find " + f.severity);
+    const row = el("div", "find " + f.severity); row.id = "finding-" + f.n;
+    row.addEventListener("mouseenter", () => hot(f.n, true)); row.addEventListener("mouseleave", () => hot(f.n, false));
     row.append(el("div", "num", String(f.n)));
     const mid = el("div"); mid.append(el("div", "t", f.record), el("div", "d", f.message));
     const fix = el("div", "fix"); fix.append(el("b", "", "Fix: "), document.createTextNode(f.fix)); mid.append(fix);
-    const vs = el("div", "vs"); vs.append(el("span", "", "As-built"), el("span", "", String(f.asbuilt)), el("span", "", "GIS"), el("span", "", String(f.inventory))); mid.append(vs);
+    const diff = el("div", "diff"); diff.append(el("span", "tag", "GIS"), el("span", "was", String(f.inventory)), el("span", "arrow", "\u2192"), el("span", "tag", "Built"), el("span", "now", String(f.asbuilt))); mid.append(diff);
     row.append(mid, el("span", "pill sev-" + f.severity, f.severity));
     g.append(row);
   }
@@ -525,10 +590,122 @@ function checkShape(rec) {
   return rec;
 }
 
+const KEY_MSG = "Showing the answer key: the records I pulled from these notes by hand.";
+function invNote(msg, cls) {
+  const n = $("inv-note");
+  n.textContent = msg || (inventory === SAMPLE_INVENTORY
+    ? "Sample inventory: " + inventory.cables.length + " cable records and " + inventory.splices.length + " splice records from a design-stage GIS export that was never updated after construction."
+    : "Your inventory: " + inventory.cables.length + " cable records and " + inventory.splices.length + " splice records.");
+  n.className = "status" + (cls ? " " + cls : inventory === SAMPLE_INVENTORY ? "" : " live");
+}
+
+function loadScript(src) {
+  return new Promise((ok, fail) => { const t = document.createElement("script"); t.src = src; t.onload = ok; t.onerror = () => fail(new Error("could not load the PDF reader")); document.head.append(t); });
+}
+async function pdfText(file) {
+  if (!window.pdfjsLib) { await loadScript(PDFJS.lib); await loadScript(PDFJS.worker); }
+  const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const out = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const items = (await (await pdf.getPage(n)).getTextContent()).items.filter((i) => i.str && i.str.trim());
+    const rows = new Map();
+    for (const i of items) { const y = Math.round(i.transform[5] / 3) * 3; if (!rows.has(y)) rows.set(y, []); rows.get(y).push(i); }
+    [...rows.keys()].sort((a, b) => b - a).forEach((y) => out.push(rows.get(y).sort((a, b) => a.transform[4] - b.transform[4]).map((i) => i.str).join(" ")));
+  }
+  const text = out.join("\n");
+  if (text.replace(/\s/g, "").length < 20) throw new Error("this PDF has no text layer, so it is probably a scan and needs OCR first");
+  return text;
+}
+
+function parseCsv(text) {
+  const rows = []; let row = [], cell = "", q = false;
+  for (let k = 0; k < text.length; k++) {
+    const ch = text[k];
+    if (q) { if (ch === '"' && text[k + 1] === '"') { cell += '"'; k++; } else if (ch === '"') q = false; else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[k + 1] === "\n") k++; row.push(cell); cell = ""; if (row.some((c) => c.trim())) rows.push(row); row = []; }
+    else cell += ch;
+  }
+  row.push(cell); if (row.some((c) => c.trim())) rows.push(row);
+  return rows;
+}
+function cablesFromGeojson(text) {
+  const data = JSON.parse(text);
+  if (!data || !Array.isArray(data.features)) throw new Error("not a GeoJSON feature collection");
+  const cables = data.features.map((f) => f.properties || {}).filter((p) => p.layer === "cable" || (p.layer === undefined && p.cable_id))
+    .map((p) => ({ cable_id: p.cable_id, fiber_count: p.fiber_count ?? null, from: p.from_struct ?? null, to: p.to_struct ?? null, length_ft: p.length_ft ?? null, placement: p.placement ?? null }));
+  if (!cables.length) throw new Error("no cable features found (each needs a cable_id property)");
+  const bad = cables.find((c) => !c.cable_id || !c.from || !c.to);
+  if (bad) throw new Error("a cable is missing cable_id, from_struct or to_struct");
+  return cables;
+}
+function splicesFromCsv(text) {
+  const rows = parseCsv(text), need = ["closure_id", "structure", "backbone_cable", "bb_start", "bb_end", "branch_cable", "br_start", "br_end"];
+  if (!rows.length) throw new Error("the splice file is empty");
+  const head = rows[0].map((h) => h.trim().toLowerCase()), miss = need.filter((n) => !head.includes(n));
+  if (miss.length) throw new Error("the splice file is missing columns: " + miss.join(", "));
+  const col = (r, n) => (r[head.indexOf(n)] || "").trim();
+  return rows.slice(1).map((r, k) => {
+    const nums = ["bb_start", "bb_end", "br_start", "br_end"].map((n) => Number(col(r, n)));
+    if (nums.some((v) => !Number.isInteger(v))) throw new Error("splice row " + (k + 2) + " has a fiber number that is not a whole number");
+    return { closure_id: col(r, "closure_id"), structure: col(r, "structure"), backbone_cable: col(r, "backbone_cable"), backbone_fibers: [nums[0], nums[1]], branch_cable: col(r, "branch_cable"), branch_fibers: [nums[2], nums[3]] };
+  });
+}
+
+async function takeNotesFile(file) {
+  const name = file.name.toLowerCase();
+  try {
+    if (name.endsWith(".json")) {
+      records = checkShape(JSON.parse(await file.text()));
+      setStatus("Loaded " + records.cables.length + " cable records and " + records.splices.length + " splices from " + file.name + ".", "live");
+      $("useref").hidden = !hasClaude; $("reset-all").hidden = false; render(); return;
+    }
+    const text = name.endsWith(".pdf") ? await pdfText(file) : await file.text();
+    $("notes").value = text.trim();
+    $("reset-all").hidden = false;
+    setStatus("Loaded " + file.name + " (" + text.trim().split("\n").length + " lines). " + (hasClaude
+      ? "Press Extract with Claude to read it. The records below are still the previous ones."
+      : "Reading notes needs Claude, which is not available in this view. Sign in to Claude, or run the extract command from the repository and drop the records .json here. The records below are still the previous ones."), hasClaude ? "" : "err");
+  } catch (err) { setStatus("Could not use " + file.name + ": " + (err && err.message ? err.message : "unreadable file") + ".", "err"); }
+}
+async function takeInventoryFiles(files) {
+  try {
+    let next = inventory === SAMPLE_INVENTORY ? { cables: [], splices: [] } : { cables: inventory.cables, splices: inventory.splices };
+    for (const file of files) {
+      const name = file.name.toLowerCase(), text = await file.text();
+      if (name.endsWith(".csv")) next.splices = splicesFromCsv(text);
+      else next.cables = cablesFromGeojson(text);
+    }
+    if (!next.cables.length) { invNote("Splices loaded. Now add the cable .geojson; until then the sample inventory is still in use.", "err"); pendingSplices = next.splices; return; }
+    if (!next.splices.length && pendingSplices) next.splices = pendingSplices;
+    inventory = next; pendingSplices = null; $("reset-all").hidden = false; invNote(); render();
+  } catch (err) { invNote("Could not use that inventory: " + (err && err.message ? err.message : "unreadable file") + ". The previous inventory is still in use.", "err"); }
+}
+let pendingSplices = null;
+function wireUploads() {
+  const zone = (id, input, handler, many) => {
+    const d = $(id);
+    ["dragenter", "dragover"].forEach((t) => d.addEventListener(t, (e) => { e.preventDefault(); d.classList.add("over"); }));
+    ["dragleave", "drop"].forEach((t) => d.addEventListener(t, (e) => { e.preventDefault(); d.classList.remove("over"); }));
+    d.addEventListener("drop", (e) => { const f = Array.from(e.dataTransfer.files); if (f.length) handler(many ? f : f[0]); });
+    $(input).addEventListener("change", (e) => { const f = Array.from(e.target.files); if (f.length) handler(many ? f : f[0]); e.target.value = ""; });
+  };
+  zone("drop-notes", "notes-input", takeNotesFile, false);
+  zone("drop-inv", "inv-input", takeInventoryFiles, true);
+  $("pick-notes").addEventListener("click", () => $("notes-input").click());
+  $("pick-inv").addEventListener("click", () => $("inv-input").click());
+  $("reset-all").addEventListener("click", () => {
+    records = REFERENCE; inventory = SAMPLE_INVENTORY; pendingSplices = null; $("notes").value = NOTES;
+    $("reset-all").hidden = true; $("useref").hidden = true; setStatus(KEY_MSG); invNote(); render();
+  });
+}
+
 function init() {
   $("notes").value = NOTES;
-  $("inv-note").textContent = "Inventory: " + INVENTORY.cables.length + " cable records and " + INVENTORY.splices.length + " splice records from a design-stage GIS export that was never updated after construction.";
-  setStatus("Showing the answer key: the records I pulled from these notes by hand.");
+  invNote();
+  setStatus(KEY_MSG);
+  wireUploads();
   $("tol").addEventListener("input", render);
   $("controls").addEventListener("submit", (e) => e.preventDefault());
   $("copy").addEventListener("click", async () => {
@@ -543,6 +720,7 @@ async function lightUpClaude() {
   let sample = null;
   try { if (window.claude && typeof window.claude.use === "function") sample = await window.claude.use("sample"); } catch (e) { sample = null; }
   if (!sample) return;
+  hasClaude = true;
   $("run").hidden = false;
   $("run").addEventListener("click", async () => {
     const btn = $("run"), notes = $("notes").value; btn.disabled = true; setStatus("Claude is reading the notes.");
@@ -557,11 +735,11 @@ async function lightUpClaude() {
       } else setStatus("Read by Claude just now from your edited notes. There is no answer key for edited notes, so check the records below.", "live");
       $("useref").hidden = false; render();
     } catch (err) {
-      if (err && err.code === "not_granted") { document.querySelectorAll(".ai").forEach((n) => { n.hidden = true; }); setStatus("Showing the answer key: the records I pulled from these notes by hand."); }
+      if (err && err.code === "not_granted") { document.querySelectorAll(".ai").forEach((n) => { n.hidden = true; }); setStatus(KEY_MSG); }
       else setStatus(err && err.code === "rate_limited" ? "Claude is busy. Try again in a minute. Still showing the previous records." : "Claude's reply could not be used (" + (err && err.message ? err.message : "unknown error") + "). Still showing the previous records.", "err");
     } finally { btn.disabled = false; }
   });
-  $("useref").addEventListener("click", () => { records = REFERENCE; $("useref").hidden = true; setStatus("Showing the answer key: the records I pulled from these notes by hand."); render(); });
+  $("useref").addEventListener("click", () => { records = REFERENCE; $("useref").hidden = true; setStatus(KEY_MSG + ($("notes").value.trim() === NOTES.trim() ? "" : " They belong to the sample notes, not the notes in the box.")); render(); });
 }
 
 init();
