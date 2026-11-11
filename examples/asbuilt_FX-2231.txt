@@ -1,0 +1,22 @@
+AS-BUILT CLOSEOUT NOTES - PROJECT FX-2231 MAPLE AVE LATERALS
+Contractor: Example Boring Co.    Foreman notes transcribed 10/28
+
+10/14 - Pulled 144ct backbone (CBL-144-01) HH-101 to HH-102 in existing 2" duct. Sheath marks 0412 to 1096 = 684'
+10/14 - cont'd HH-102 > HH-103, 144F, 1,022 ft by sheath. UG.
+10/15 - HH-103 to HH-104: bored new 1.25" HDPE, placed 144F. 1310' (plan showed 1180, had to go around gas reg station)
+10/16 - HH-104 to HH-105 144F 760 ft UG.
+10/17 - HH-105 to HH-106. Duct collapsed at RR spur. Went AERIAL on existing strand w/ permission, 144ct, 905'
+
+Laterals:
+ L-01  12F  HH-102 to Bldg 110 Maple (MPOE)   240'  UG
+ L-02  deferred, customer cancelled, NOT BUILT
+ L-03  upsized to 24F per CO#2. HH-103 to Bldg 300 Maple. 315 ft UG
+ L-04  12F. HH-104 was flooded, moved splice + lateral to HH-105. HH-105 to Bldg 410 Maple, 280' UG
+ L-05  12ct ADDED per field change FC-07, HH-105 to Bldg 455 Maple 190 ft UG
+
+Splicing (J. Ortega 10/20-10/21):
+ SC-102 @ HH-102: backbone fibers 1-12 spliced to L-01 1-12. 13-144 express.
+ SC-103 @ HH-103: bb 13-36 to L-03 1-24. rest express
+ SC-105 @ HH-105: bb 37-48 to L-04 1-12; bb 49-60 to L-05 1-12. remainder expressed thru
+
+OTDR all passed, see traces.

@@ -1,0 +1,4 @@
+closure_id,structure,backbone_cable,bb_start,bb_end,branch_cable,br_start,br_end
+SC-102,HH-102,CBL-144-01,1,12,LAT-01,1,12
+SC-103,HH-103,CBL-144-01,13,24,L-03,1,12
+SC-104,HH-104,CBL-144-01,25,36,L-04,1,12

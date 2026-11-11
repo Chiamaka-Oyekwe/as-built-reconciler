@@ -1,0 +1,390 @@
+{
+ "type": "FeatureCollection",
+ "name": "FX-2231 inventory (synthetic)",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.61,
+     32.95
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "HH-101",
+    "type": "handhole"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.6078,
+     32.95
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "HH-102",
+    "type": "handhole"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.6045,
+     32.95
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "HH-103",
+    "type": "handhole"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.6007,
+     32.95
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "HH-104",
+    "type": "handhole"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.5982,
+     32.95
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "HH-105",
+    "type": "handhole"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.5953,
+     32.95
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "HH-106",
+    "type": "handhole"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.6078,
+     32.9493
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "BLDG-110",
+    "type": "building"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.6072,
+     32.9507
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "BLDG-220",
+    "type": "building"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.6045,
+     32.9491
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "BLDG-300",
+    "type": "building"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -96.6007,
+     32.9492
+    ]
+   },
+   "properties": {
+    "layer": "structure",
+    "struct_id": "BLDG-410",
+    "type": "building"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.61,
+      32.95
+     ],
+     [
+      -96.6078,
+      32.95
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "CBL-144-01",
+    "fiber_count": 144,
+    "from_struct": "HH-101",
+    "to_struct": "HH-102",
+    "length_ft": 690,
+    "placement": "underground",
+    "status": "design"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.6078,
+      32.95
+     ],
+     [
+      -96.6045,
+      32.95
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "CBL-144-01",
+    "fiber_count": 144,
+    "from_struct": "HH-102",
+    "to_struct": "HH-103",
+    "length_ft": 1015,
+    "placement": "underground",
+    "status": "design"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.6045,
+      32.95
+     ],
+     [
+      -96.6007,
+      32.95
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "CBL-144-01",
+    "fiber_count": 144,
+    "from_struct": "HH-103",
+    "to_struct": "HH-104",
+    "length_ft": 1180,
+    "placement": "underground",
+    "status": "design"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.6007,
+      32.95
+     ],
+     [
+      -96.5982,
+      32.95
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "CBL-144-01",
+    "fiber_count": 144,
+    "from_struct": "HH-104",
+    "to_struct": "HH-105",
+    "length_ft": 755,
+    "placement": "underground",
+    "status": "design"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.5982,
+      32.95
+     ],
+     [
+      -96.5953,
+      32.95
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "CBL-144-01",
+    "fiber_count": 144,
+    "from_struct": "HH-105",
+    "to_struct": "HH-106",
+    "length_ft": 900,
+    "placement": "underground",
+    "status": "design"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.6078,
+      32.95
+     ],
+     [
+      -96.6078,
+      32.9493
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "LAT-01",
+    "fiber_count": 12,
+    "from_struct": "HH-102",
+    "to_struct": "BLDG-110",
+    "length_ft": 240,
+    "placement": "underground",
+    "status": "design"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.6078,
+      32.95
+     ],
+     [
+      -96.6072,
+      32.9507
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "L-02",
+    "fiber_count": 12,
+    "from_struct": "HH-102",
+    "to_struct": "BLDG-220",
+    "length_ft": 210,
+    "placement": "underground",
+    "status": "design"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.6045,
+      32.95
+     ],
+     [
+      -96.6045,
+      32.9491
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "L-03",
+    "fiber_count": 12,
+    "from_struct": "HH-103",
+    "to_struct": "BLDG-300",
+    "length_ft": 310,
+    "placement": "underground",
+    "status": "design"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -96.6007,
+      32.95
+     ],
+     [
+      -96.6007,
+      32.9492
+     ]
+    ]
+   },
+   "properties": {
+    "layer": "cable",
+    "cable_id": "L-04",
+    "fiber_count": 12,
+    "from_struct": "HH-104",
+    "to_struct": "BLDG-410",
+    "length_ft": 265,
+    "placement": "underground",
+    "status": "design"
+   }
+  }
+ ]
+}

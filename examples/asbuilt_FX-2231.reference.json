@@ -1,0 +1,153 @@
+{
+  "project": "FX-2231",
+  "cables": [
+    {
+      "cable_id": "CBL-144-01",
+      "fiber_count": 144,
+      "from": "HH-101",
+      "to": "HH-102",
+      "length_ft": 684,
+      "placement": "underground",
+      "status": "built"
+    },
+    {
+      "cable_id": "CBL-144-01",
+      "fiber_count": 144,
+      "from": "HH-102",
+      "to": "HH-103",
+      "length_ft": 1022,
+      "placement": "underground",
+      "status": "built"
+    },
+    {
+      "cable_id": "CBL-144-01",
+      "fiber_count": 144,
+      "from": "HH-103",
+      "to": "HH-104",
+      "length_ft": 1310,
+      "placement": "underground",
+      "status": "built"
+    },
+    {
+      "cable_id": "CBL-144-01",
+      "fiber_count": 144,
+      "from": "HH-104",
+      "to": "HH-105",
+      "length_ft": 760,
+      "placement": "underground",
+      "status": "built"
+    },
+    {
+      "cable_id": "CBL-144-01",
+      "fiber_count": 144,
+      "from": "HH-105",
+      "to": "HH-106",
+      "length_ft": 905,
+      "placement": "aerial",
+      "status": "built"
+    },
+    {
+      "cable_id": "L-01",
+      "fiber_count": 12,
+      "from": "HH-102",
+      "to": "BLDG-110",
+      "length_ft": 240,
+      "placement": "underground",
+      "status": "built"
+    },
+    {
+      "cable_id": "L-02",
+      "fiber_count": null,
+      "from": null,
+      "to": null,
+      "length_ft": null,
+      "placement": null,
+      "status": "not_built"
+    },
+    {
+      "cable_id": "L-03",
+      "fiber_count": 24,
+      "from": "HH-103",
+      "to": "BLDG-300",
+      "length_ft": 315,
+      "placement": "underground",
+      "status": "built"
+    },
+    {
+      "cable_id": "L-04",
+      "fiber_count": 12,
+      "from": "HH-105",
+      "to": "BLDG-410",
+      "length_ft": 280,
+      "placement": "underground",
+      "status": "built"
+    },
+    {
+      "cable_id": "L-05",
+      "fiber_count": 12,
+      "from": "HH-105",
+      "to": "BLDG-455",
+      "length_ft": 190,
+      "placement": "underground",
+      "status": "built"
+    }
+  ],
+  "splices": [
+    {
+      "closure_id": "SC-102",
+      "structure": "HH-102",
+      "backbone_cable": "CBL-144-01",
+      "backbone_fibers": [
+        1,
+        12
+      ],
+      "branch_cable": "L-01",
+      "branch_fibers": [
+        1,
+        12
+      ]
+    },
+    {
+      "closure_id": "SC-103",
+      "structure": "HH-103",
+      "backbone_cable": "CBL-144-01",
+      "backbone_fibers": [
+        13,
+        36
+      ],
+      "branch_cable": "L-03",
+      "branch_fibers": [
+        1,
+        24
+      ]
+    },
+    {
+      "closure_id": "SC-105",
+      "structure": "HH-105",
+      "backbone_cable": "CBL-144-01",
+      "backbone_fibers": [
+        37,
+        48
+      ],
+      "branch_cable": "L-04",
+      "branch_fibers": [
+        1,
+        12
+      ]
+    },
+    {
+      "closure_id": "SC-105",
+      "structure": "HH-105",
+      "backbone_cable": "CBL-144-01",
+      "backbone_fibers": [
+        49,
+        60
+      ],
+      "branch_cable": "L-05",
+      "branch_fibers": [
+        1,
+        12
+      ]
+    }
+  ]
+}

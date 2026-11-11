@@ -1,0 +1,4 @@
+# The reconciler itself needs nothing beyond Python 3.10.
+anthropic>=0.40   # extract command
+pypdf>=4          # reading PDF as-builts
+pytest>=8
