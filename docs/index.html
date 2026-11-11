@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>As-Built Reconciler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: the route is the hero. A straight-line diagram of what was built sits on a dark band,
+   with numbered flags wherever the GIS disagrees; the findings read below it in the same numbers. */
+:root {
+  --paper: #edeee9;
+  --sheet: #ffffff;
+  --ink: #1a1e21;
+  --muted: #5b6468;
+  --line: #d5d8d1;
+  --fiber: #f26a1b;
+  --fiber-text: #b3440a;
+  --good: #1c7a4a; --good-bg: #e2f2e8;
+  --bad: #b3261e; --bad-bg: #fbe7e4;
+  --warn: #8a6200; --warn-bg: #f8eecb;
+  --road: #17191b; --road-ink: #f1efe8; --road-muted: #a9aca6; --road-line: #34393c;
+  --asphalt: #2b2f32; --lane: #e9e6dc; --center: #e3b53a; --concrete: #b4b6ae; --grass: #56664f;
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111315; --sheet: #1b1f22; --ink: #ecede7; --muted: #a0a7a8; --line: #2f3539;
+    --fiber: #ff7b2e; --fiber-text: #ff9a5c;
+    --good: #6dd39c; --good-bg: #16352a; --bad: #ff9085; --bad-bg: #3f1b18; --warn: #e9c45c; --warn-bg: #3a2f10;
+    --road: #0b0c0d; --road-line: #2a2e31;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111315; --sheet: #1b1f22; --ink: #ecede7; --muted: #a0a7a8; --line: #2f3539;
+  --fiber: #ff7b2e; --fiber-text: #ff9a5c;
+  --good: #6dd39c; --good-bg: #16352a; --bad: #ff9085; --bad-bg: #3f1b18; --warn: #e9c45c; --warn-bg: #3a2f10;
+  --road: #0b0c0d; --road-line: #2a2e31;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font: 400 15px/1.55 var(--body); }
+h1, h2, h3, p { margin: 0; }
+h1, h2 { font-family: var(--display); font-weight: 800; text-transform: uppercase; text-wrap: balance; line-height: 0.95; }
+a { color: var(--fiber-text); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--fiber); outline-offset: 2px; }
+
+/* Hero */
+.hero { background: var(--road); color: var(--road-ink); border-bottom: 6px solid var(--fiber); }
+.hero-in { max-width: 1200px; margin: 0 auto; padding: 28px 20px 26px; display: grid; gap: 22px; }
+.hero-top { display: grid; grid-template-columns: 1fr auto; gap: 16px 32px; align-items: end; }
+.eyebrow { font: 600 11.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--fiber); display: flex; align-items: center; gap: 10px; }
+.eyebrow::before { content: ""; width: 26px; height: 3px; background: var(--fiber); }
+h1 { font-size: clamp(44px, 7.4vw, 92px); letter-spacing: 0.005em; margin-top: 10px; }
+h1 em { font-style: normal; color: var(--fiber); }
+.lede { color: var(--road-muted); max-width: 56ch; font-size: 16px; margin-top: 12px; }
+.byline { font: 400 12px/1.7 var(--mono); color: var(--road-muted); text-align: right; }
+.byline b { color: var(--road-ink); font-weight: 600; }
+.byline a { color: var(--fiber); }
+.strip-wrap { border: 1px solid var(--road-line); background: #101213; overflow-x: auto; }
+svg.strip { display: block; width: 100%; min-width: 620px; height: auto; }
+.strip text { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; fill: var(--lane); }
+.strip .dim { fill: var(--fiber); font-weight: 600; font-size: 13px; }
+.strip .faint { fill: #8d918a; font-size: 9.5px; }
+@keyframes reveal { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.strip .reveal-rect { transform-box: fill-box; transform-origin: left center; }
+.strip.draw .reveal-rect { animation: reveal 1.1s cubic-bezier(.3,.7,.2,1) both; }
+
+/* Body */
+.wrap { max-width: 1200px; margin: 0 auto; padding: 22px 20px 56px; display: grid; grid-template-columns: 340px 1fr; gap: 22px; align-items: start; }
+.panel { background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; padding: 18px; display: grid; gap: 14px; }
+.rail { position: sticky; top: 14px; }
+h2 { font-size: 26px; letter-spacing: 0.02em; }
+.kicker { font: 600 11px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+label.f { display: grid; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+input[type=text], input[type=number], input[type=date], select, textarea {
+  font: 400 14.5px/1.4 var(--body); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 3px; padding: 8px 9px; width: 100%;
+}
+textarea { font: 400 12.5px/1.6 var(--mono); resize: vertical; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+legend { padding: 0; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--ink); border-radius: 3px; overflow: hidden; }
+.seg label { position: relative; }
+.seg span { display: block; text-align: center; padding: 9px 4px; font: 600 13px/1 var(--body); cursor: pointer; border-left: 1px solid var(--ink); }
+.seg label:first-child span { border-left: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips label { position: relative; }
+.chips span { display: inline-block; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; cursor: pointer; background: var(--paper); user-select: none; }
+.seg input, .chips input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg input:checked + span { background: var(--ink); color: var(--sheet); }
+.chips input:checked + span { background: var(--fiber); border-color: var(--fiber); color: #1a1205; font-weight: 600; }
+.seg input:focus-visible + span, .chips input:focus-visible + span { outline: 2px solid var(--fiber); outline-offset: 2px; }
+.drop { display: grid; gap: 8px; border: 1.5px dashed var(--fiber); border-radius: 4px; padding: 12px; font-size: 13px; color: var(--muted); background: repeating-linear-gradient(135deg, transparent 0 14px, color-mix(in srgb, var(--fiber) 7%, transparent) 14px 28px); }
+.drop b { color: var(--ink); font-size: 14px; }
+.drop.over { background: var(--good-bg); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button { font: 600 13px/1 var(--body); padding: 10px 13px; border-radius: 3px; border: 1px solid var(--ink); background: var(--sheet); color: var(--ink); cursor: pointer; }
+button:hover { background: var(--paper); }
+button.primary { background: var(--ink); color: var(--sheet); }
+button.primary:hover { background: var(--fiber); border-color: var(--fiber); color: #1a1205; }
+button:disabled { opacity: 0.55; cursor: progress; }
+
+.results { display: grid; gap: 22px; min-width: 0; }
+.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); overflow: hidden; }
+.stat { padding: 16px 18px 14px; border-left: 1px solid var(--line); display: grid; gap: 4px; position: relative; }
+.stat:first-child { border-left: 0; }
+.stat::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--tone, var(--ink)); }
+.stat b { font: 800 54px/0.9 var(--display); font-variant-numeric: tabular-nums; color: var(--tone, var(--ink)); }
+.stat b small { font-size: 26px; color: var(--muted); }
+.stat span { font-size: 13px; color: var(--muted); }
+.stat.good { --tone: var(--good); } .stat.bad { --tone: var(--bad); } .stat.warn { --tone: var(--warn); }
+.head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; justify-content: space-between; }
+.group { display: grid; }
+.group-h { display: flex; align-items: center; gap: 10px; padding: 14px 0 8px; }
+.group-h::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.count { font: 600 11px/1 var(--mono); color: var(--muted); }
+.req { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 12px 12px 12px 14px; border-left: 4px solid var(--line); margin-bottom: 6px; background: color-mix(in srgb, var(--paper) 55%, var(--sheet)); border-radius: 0 3px 3px 0; }
+.req.is-missing { border-left-color: var(--bad); background: var(--bad-bg); }
+.req.is-found { border-left-color: var(--good); }
+.req .id { font: 600 10.5px/1 var(--mono); letter-spacing: 0.08em; color: var(--muted); margin-bottom: 5px; }
+.req .t { font-weight: 700; font-size: 15.5px; line-height: 1.3; }
+.req .d { color: var(--muted); font-size: 14px; max-width: 70ch; margin-top: 3px; }
+.req .s { font-size: 12.5px; margin-top: 5px; }
+.pill { align-self: start; font: 700 10.5px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; padding: 6px 8px; border-radius: 2px; white-space: nowrap; }
+.pill.good { background: var(--good-bg); color: var(--good); } .pill.bad { background: var(--bad); color: #fff; } .pill.warn { background: var(--warn-bg); color: var(--warn); }
+.letter { margin: 0; white-space: pre-wrap; font: 400 14.5px/1.65 var(--body); background: var(--sheet); border: 1px solid var(--line); border-top: 5px solid var(--ink); padding: 26px 28px; box-shadow: 0 10px 24px -18px rgba(0,0,0,.5); max-width: 74ch; overflow-x: auto; }
+.note { font-size: 13px; color: var(--muted); max-width: 72ch; }
+.unmatched { font: 400 12px/1.6 var(--mono); color: var(--muted); }
+.ai[hidden] { display: none; }
+.answer { white-space: pre-wrap; background: var(--paper); border-left: 4px solid var(--fiber); padding: 12px 14px; font-size: 14.5px; }
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: 1fr; } .rail { position: static; }
+  .hero-top { grid-template-columns: 1fr; } .byline { text-align: left; }
+  .board { grid-template-columns: 1fr; } .stat { border-left: 0; border-top: 1px solid var(--line); } .stat:first-child { border-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .strip.draw .reveal-rect { animation: none; } }
+
+.strip-wrap { background-color: #0e1011; background-image: linear-gradient(#ffffff0a 1px, transparent 1px), linear-gradient(90deg, #ffffff0a 1px, transparent 1px); background-size: 40px 40px; border-radius: 4px; }
+.strip .flag { cursor: pointer; } .strip .flag circle { transition: r .15s ease; }
+.strip .flag.hot circle { r: 13; stroke: #fff; stroke-width: 2; }
+.strip .flag:focus-visible circle { stroke: #fff; stroke-width: 2.5; }
+.find { transition: box-shadow .15s ease, transform .15s ease; scroll-margin-top: 16px; }
+.find.hot { box-shadow: 0 0 0 2px var(--tone), 0 10px 22px -14px rgba(0,0,0,.55); transform: translateX(3px); }
+.sevbar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--line); }
+.sevbar i { display: block; height: 100%; } .sevbar .h { background: var(--bad); } .sevbar .m { background: var(--warn); } .sevbar .l { background: var(--muted); }
+.sevkey { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 600 11px/1.4 var(--mono); color: var(--muted); letter-spacing: 0.04em; }
+.sevkey b { color: var(--ink); }
+.diff { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 9px; font: 400 12px/1.4 var(--mono); }
+.diff .was { padding: 4px 8px; border-radius: 3px; background: var(--sheet); border: 1px solid var(--line); color: var(--muted); text-decoration: line-through; text-decoration-color: var(--bad); }
+.diff .now { padding: 4px 8px; border-radius: 3px; background: var(--good-bg); color: var(--good); font-weight: 600; border: 1px solid transparent; }
+.diff .tag { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.diff .arrow { color: var(--muted); }
+.stepnum { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--sheet); font: 700 12px/1 var(--mono); margin-right: 8px; vertical-align: 3px; }
+tr:nth-child(even) td { background: color-mix(in srgb, var(--paper) 45%, transparent); }
+.panel { box-shadow: 0 1px 0 rgba(0,0,0,.03), 0 14px 30px -26px rgba(0,0,0,.5); }
+@media (prefers-reduced-motion: reduce) { .find, .strip .flag circle { transition: none; } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 22px; font: 400 11.5px/1.4 var(--mono); color: var(--road-muted); }
+.legend i { display: inline-block; width: 26px; height: 0; border-top: 3px solid var(--fiber); vertical-align: middle; margin-right: 8px; }
+.legend i.lat { border-top-color: var(--lane); } .legend i.ghost { border-top: 2px dashed #7d8279; }
+.legend b { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: #ff5a52; color: #101213; font-size: 10px; margin-right: 8px; }
+.strip .nodelab { font-size: 11px; font-weight: 600; }
+.strip .badge { font-size: 10.5px; font-weight: 600; fill: #101213; letter-spacing: 0; }
+.find { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 14px; padding: 13px 12px 13px 12px; border-left: 4px solid var(--tone); margin-bottom: 6px; background: color-mix(in srgb, var(--paper) 55%, var(--sheet)); border-radius: 0 3px 3px 0; }
+.find.high { --tone: var(--bad); background: var(--bad-bg); } .find.medium { --tone: var(--warn); } .find.low { --tone: var(--muted); }
+.num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 700 12px/1 var(--mono); background: var(--tone); color: var(--sheet); }
+.find .t { font-weight: 700; font-size: 15.5px; line-height: 1.3; }
+.find .d { color: var(--ink); font-size: 14px; max-width: 72ch; margin-top: 3px; }
+.find .fix { color: var(--muted); font-size: 13.5px; margin-top: 4px; max-width: 72ch; }
+.find .fix b { color: var(--ink); }
+.vs { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font: 400 12px/1.5 var(--mono); margin-top: 8px; color: var(--muted); }
+.vs span:nth-child(odd) { text-transform: uppercase; letter-spacing: 0.08em; font-size: 10.5px; padding-top: 1px; }
+.pill.sev-high { background: var(--bad); color: #fff; } .pill.sev-medium { background: var(--warn-bg); color: var(--warn); } .pill.sev-low { background: var(--paper); color: var(--muted); border: 1px solid var(--line); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th { text-align: left; font: 600 10.5px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 8px 0; border-bottom: 1px solid var(--ink); white-space: nowrap; }
+td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.mono { font-family: var(--mono); font-size: 12.5px; }
+tr.nb td { color: var(--muted); text-decoration: line-through; }
+pre.csv { margin: 0; font: 400 12.5px/1.65 var(--mono); background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--ink); padding: 16px 18px; overflow: auto; max-height: 460px; white-space: pre-wrap; overflow-wrap: anywhere; }
+input[type=range] { width: 100%; accent-color: var(--fiber); }
+.status { font-size: 13px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 10px; }
+.mapper { display: grid; gap: 8px; border: 1px solid var(--line); border-left: 4px solid var(--fiber); border-radius: 0 3px 3px 0; padding: 12px; background: var(--paper); }
+.mapper[hidden] { display: none; }
+#map-rows { display: grid; gap: 7px; }
+.maprow { display: grid; grid-template-columns: 112px 1fr; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.maprow select { background: var(--sheet); padding: 6px 7px; font-size: 13px; }
+.maprow.need span::after { content: " *"; color: var(--bad); }
+.fmt { font-size: 13px; color: var(--muted); } .fmt summary { cursor: pointer; font-weight: 600; color: var(--ink); } .fmt p { margin-top: 8px; }
+code { font: 400 12px/1.4 var(--mono); background: var(--paper); padding: 1px 4px; border-radius: 2px; }
+.status.live { border-left-color: var(--good); color: var(--ink); } .status.err { border-left-color: var(--bad); color: var(--ink); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-in">
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow">As-built records against GIS inventory</div>
+        <h1>As-Built <em>Reconciler</em></h1>
+        <p class="lede">The crew's closeout notes say one thing. The GIS says another. This reads the notes, compares every cable and splice with the inventory, and lists what to fix before someone assigns a circuit to fibers that are not there.</p>
+      </div>
+      <div class="byline">
+        <div><b>Chiamaka Oyekwe</b></div>
+        <div>Sample project FX-2231</div>
+        <div>Synthetic data</div>
+        <div><a href="https://github.com/tochoby/as-built-reconciler" target="_blank" rel="noopener">Source on GitHub</a></div>
+      </div>
+    </div>
+    <div class="strip-wrap">
+      <svg class="strip" id="strip" viewBox="0 0 1000 286" role="img" aria-labelledby="strip-title">
+        <title id="strip-title">Straight-line diagram of the route as built, with flags where the inventory disagrees</title>
+        <defs><clipPath id="reveal"><rect class="reveal-rect" x="0" y="0" width="1000" height="286"/></clipPath></defs>
+        <g id="strip-g"></g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i></i>Backbone, as built</span>
+      <span><i class="lat"></i>Lateral, as built</span>
+      <span><i class="ghost"></i>In the GIS only</span>
+      <span><b>1</b>Finding, numbered as in the list below</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <form class="panel rail" id="controls" autocomplete="off">
+    <h2><span class="stepnum">1</span>Closeout notes</h2>
+    <div class="drop" id="drop-notes">
+      <b>Drop your as-built here</b>
+      <span>Closeout notes as .txt or .pdf, or records already extracted as .json.</span>
+      <div class="row"><button type="button" id="pick-notes">Choose a file</button></div>
+      <input type="file" id="notes-input" accept=".txt,.pdf,.json,text/plain,application/pdf,application/json" hidden>
+    </div>
+    <label class="f">What the foreman wrote
+      <textarea id="notes" rows="13" spellcheck="false"></textarea>
+    </label>
+    <div class="row">
+      <button type="button" class="primary ai" id="run" hidden>Extract with Claude</button>
+      <button type="button" class="ai" id="useref" hidden>Use the answer key</button>
+    </div>
+    <p class="status" id="status"></p>
+    <h2 style="margin-top:8px"><span class="stepnum">2</span>GIS inventory</h2>
+    <label class="f">Length tolerance: <span id="tol-out"></span>
+      <input type="range" id="tol" min="1" max="15" step="1" value="5">
+    </label>
+    <div class="drop" id="drop-inv">
+      <b>Drop your GIS inventory here</b>
+      <span>Cables as a zipped shapefile, .kml, .kmz, .geojson or .csv. Splices as .csv. Drop them together or one at a time.</span>
+      <div class="row">
+        <button type="button" id="pick-inv">Choose files</button>
+        <button type="button" id="reset-all" hidden>Back to the sample project</button>
+      </div>
+      <input type="file" id="inv-input" accept=".zip,.kml,.kmz,.geojson,.json,.csv" multiple hidden>
+    </div>
+    <p class="status" id="inv-note"></p>
+    <div class="mapper" id="mapper" hidden>
+      <b>Match your columns</b>
+      <span class="note">I guessed where I could. Fix any that are wrong.</span>
+      <div id="map-rows"></div>
+    </div>
+    <details class="fmt">
+      <summary>File formats</summary>
+      <p><b>Cables:</b> one line per span. A shapefile goes in as a <code>.zip</code> holding the <code>.shp</code> and <code>.dbf</code> (add the <code>.prj</code> if you have it). A <code>.kml</code> or <code>.kmz</code> needs attributes inside it; one drawn by hand in Google Earth has only names. Any column names work: you match them after loading.</p>
+      <p><b>Needed:</b> cable ID and the structure at each end. <b>Compared when present:</b> fiber count, length in feet, placement. With no length column, length can be measured from the line.</p>
+      <p><b>Splices (.csv):</b> columns <code>closure_id, structure, backbone_cable, bb_start, bb_end, branch_cable, br_start, br_end</code>.</p>
+      <p><b>Records (.json):</b> what the <code>extract</code> command writes. Sample files are in the repository's examples folder.</p>
+    </details>
+    <p class="note">Files are read in your browser and are not stored. Notes are sent to Claude only when you press Extract. Do not load records you are not allowed to share.</p>
+  </form>
+
+  <main class="results">
+    <section class="board" id="summary" aria-live="polite"></section>
+    <section class="panel" id="findings"></section>
+    <section class="panel">
+      <div class="kicker">Read from the notes</div>
+      <h2>Extracted records</h2>
+      <div class="tablewrap"><table id="t-cables"></table></div>
+      <div class="tablewrap"><table id="t-splices"></table></div>
+    </section>
+    <section class="panel">
+      <div class="kicker">For the GIS team</div>
+      <h2>Corrections file</h2>
+      <p class="note">One block per correction, most urgent first: what the GIS says now, what to change it to, and what to do.</p>
+      <pre class="csv" id="fixes"></pre>
+      <div class="row"><button type="button" class="primary" id="copy">Copy as text</button><button type="button" id="copy-csv">Copy as CSV for import</button><span class="note" id="copy-note"></span></div>
+    </section>
+    <p class="note">A demonstration on a made-up project. The notes, the inventory and every name in them are synthetic. The records shown at first are the answer key I wrote by hand; with Claude available, the page reads the notes live and scores the result against that key. You can also load your own notes, records and inventory. The comparison itself uses fixed rules and no model.</p>
+  </main>
+</div>
+
+<script>
+const NOTES = "AS-BUILT CLOSEOUT NOTES - PROJECT FX-2231 MAPLE AVE LATERALS\nContractor: Example Boring Co.    Foreman notes transcribed 10/28\n\n10/14 - Pulled 144ct backbone (CBL-144-01) HH-101 to HH-102 in existing 2\" duct. Sheath marks 0412 to 1096 = 684'\n10/14 - cont'd HH-102 > HH-103, 144F, 1,022 ft by sheath. UG.\n10/15 - HH-103 to HH-104: bored new 1.25\" HDPE, placed 144F. 1310' (plan showed 1180, had to go around gas reg station)\n10/16 - HH-104 to HH-105 144F 760 ft UG.\n10/17 - HH-105 to HH-106. Duct collapsed at RR spur. Went AERIAL on existing strand w/ permission, 144ct, 905'\n\nLaterals:\n L-01  12F  HH-102 to Bldg 110 Maple (MPOE)   240'  UG\n L-02  deferred, customer cancelled, NOT BUILT\n L-03  upsized to 24F per CO#2. HH-103 to Bldg 300 Maple. 315 ft UG\n L-04  12F. HH-104 was flooded, moved splice + lateral to HH-105. HH-105 to Bldg 410 Maple, 280' UG\n L-05  12ct ADDED per field change FC-07, HH-105 to Bldg 455 Maple 190 ft UG\n\nSplicing (J. Ortega 10/20-10/21):\n SC-102 @ HH-102: backbone fibers 1-12 spliced to L-01 1-12. 13-144 express.\n SC-103 @ HH-103: bb 13-36 to L-03 1-24. rest express\n SC-105 @ HH-105: bb 37-48 to L-04 1-12; bb 49-60 to L-05 1-12. remainder expressed thru\n\nOTDR all passed, see traces.\n";
+const REFERENCE = {"project": "FX-2231", "cables": [{"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-101", "to": "HH-102", "length_ft": 684, "placement": "underground", "status": "built"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-102", "to": "HH-103", "length_ft": 1022, "placement": "underground", "status": "built"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-103", "to": "HH-104", "length_ft": 1310, "placement": "underground", "status": "built"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-104", "to": "HH-105", "length_ft": 760, "placement": "underground", "status": "built"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-105", "to": "HH-106", "length_ft": 905, "placement": "aerial", "status": "built"}, {"cable_id": "L-01", "fiber_count": 12, "from": "HH-102", "to": "BLDG-110", "length_ft": 240, "placement": "underground", "status": "built"}, {"cable_id": "L-02", "fiber_count": null, "from": null, "to": null, "length_ft": null, "placement": null, "status": "not_built"}, {"cable_id": "L-03", "fiber_count": 24, "from": "HH-103", "to": "BLDG-300", "length_ft": 315, "placement": "underground", "status": "built"}, {"cable_id": "L-04", "fiber_count": 12, "from": "HH-105", "to": "BLDG-410", "length_ft": 280, "placement": "underground", "status": "built"}, {"cable_id": "L-05", "fiber_count": 12, "from": "HH-105", "to": "BLDG-455", "length_ft": 190, "placement": "underground", "status": "built"}], "splices": [{"closure_id": "SC-102", "structure": "HH-102", "backbone_cable": "CBL-144-01", "backbone_fibers": [1, 12], "branch_cable": "L-01", "branch_fibers": [1, 12]}, {"closure_id": "SC-103", "structure": "HH-103", "backbone_cable": "CBL-144-01", "backbone_fibers": [13, 36], "branch_cable": "L-03", "branch_fibers": [1, 24]}, {"closure_id": "SC-105", "structure": "HH-105", "backbone_cable": "CBL-144-01", "backbone_fibers": [37, 48], "branch_cable": "L-04", "branch_fibers": [1, 12]}, {"closure_id": "SC-105", "structure": "HH-105", "backbone_cable": "CBL-144-01", "backbone_fibers": [49, 60], "branch_cable": "L-05", "branch_fibers": [1, 12]}]};
+const SAMPLE_INVENTORY = {"cables": [{"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-101", "to": "HH-102", "length_ft": 690, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-102", "to": "HH-103", "length_ft": 1015, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-103", "to": "HH-104", "length_ft": 1180, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-104", "to": "HH-105", "length_ft": 755, "placement": "underground"}, {"cable_id": "CBL-144-01", "fiber_count": 144, "from": "HH-105", "to": "HH-106", "length_ft": 900, "placement": "underground"}, {"cable_id": "LAT-01", "fiber_count": 12, "from": "HH-102", "to": "BLDG-110", "length_ft": 240, "placement": "underground"}, {"cable_id": "L-02", "fiber_count": 12, "from": "HH-102", "to": "BLDG-220", "length_ft": 210, "placement": "underground"}, {"cable_id": "L-03", "fiber_count": 12, "from": "HH-103", "to": "BLDG-300", "length_ft": 310, "placement": "underground"}, {"cable_id": "L-04", "fiber_count": 12, "from": "HH-104", "to": "BLDG-410", "length_ft": 265, "placement": "underground"}], "splices": [{"closure_id": "SC-102", "structure": "HH-102", "backbone_cable": "CBL-144-01", "backbone_fibers": [1, 12], "branch_cable": "LAT-01", "branch_fibers": [1, 12]}, {"closure_id": "SC-103", "structure": "HH-103", "backbone_cable": "CBL-144-01", "backbone_fibers": [13, 24], "branch_cable": "L-03", "branch_fibers": [1, 12]}, {"closure_id": "SC-104", "structure": "HH-104", "backbone_cable": "CBL-144-01", "backbone_fibers": [25, 36], "branch_cable": "L-04", "branch_fibers": [1, 12]}]};
+const PDFJS = {"lib": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", "worker": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"};
+const JSZIP_URL = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+const PROMPT = "You are reading as-built closeout notes for a fiber construction project.\nPull out every cable segment and every splice. Use only what the notes say.\n\nReturn JSON only, in this shape:\n{\n  \"project\": \"<project number or null>\",\n  \"cables\": [{\"cable_id\": str, \"fiber_count\": int|null, \"from\": str|null, \"to\": str|null,\n              \"length_ft\": number|null, \"placement\": \"underground\"|\"aerial\"|null,\n              \"status\": \"built\"|\"not_built\"}],\n  \"splices\": [{\"closure_id\": str, \"structure\": str, \"backbone_cable\": str,\n               \"backbone_fibers\": [first, last], \"branch_cable\": str, \"branch_fibers\": [first, last]}]\n}\n\nRules:\n- One cable record per span between two structures. A backbone pulled through five handholes is four records with the same cable_id.\n- Write handholes as HH-<number> and buildings as BLDG-<street number>.\n- \"ct\" and \"F\" both mean fiber count. \"UG\" means underground.\n- If a length is given as sheath marks, subtract them. If the notes give a built length and a plan length, use the built length.\n- A cable the notes say was deferred, cancelled or not built gets status \"not_built\" and null for what is unknown.\n- If a cable was moved in the field, record where it was actually built.\n- \"bb\" means the backbone cable. Express or pass-through fibers are not splices; leave them out.\n- Fiber ranges are inclusive pairs, for example [13, 36].\n\nNotes:\n<notes>\n{notes}\n<\/notes>";
+// Same rules as reconciler/reconcile.py and evaluate.py, for the browser demo.
+const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
+const norm = (v) => (typeof v === "string" ? v.trim().toUpperCase().replace(/ /g, "") : v);
+const cab = (c) => Object.assign({}, c, { cable_id: norm(c.cable_id), from: norm(c.from), to: norm(c.to) });
+const sameEnds = (a, b) => (a.from === b.from && a.to === b.to) || (a.from === b.to && a.to === b.from);
+const rng = (r) => (r ? `${r[0]}-${r[1]}` : "none");
+const none = (v) => (v === null || v === undefined ? "None" : v);
+const finding = (code, severity, record, field, asbuilt, inventory, message, fix, where) =>
+  ({ code, severity, record, field, asbuilt, inventory, message, fix, where: where || {} });
+
+function reconcile(asbuilt, inventory, tolerance = 0.05) {
+  const allA = (asbuilt.cables || []).map(cab);
+  const built = allA.filter((c) => (c.status || "built") !== "not_built");
+  const notBuilt = new Set(allA.filter((c) => c.status === "not_built").map((c) => c.cable_id));
+  const inv = (inventory.cables || []).map(cab);
+  const usedA = new Set(), usedI = new Set(), pairs = [];
+  const freeA = () => built.map((_, k) => k).filter((k) => !usedA.has(k));
+  const freeI = () => inv.map((_, k) => k).filter((k) => !usedI.has(k));
+  const pair = (ka, ki, how) => { usedA.add(ka); usedI.add(ki); pairs.push([ka, ki, how]); };
+
+  for (const ka of freeA()) for (const ki of freeI()) {
+    if (inv[ki].cable_id === built[ka].cable_id && sameEnds(inv[ki], built[ka])) { pair(ka, ki, "exact"); break; }
+  }
+  for (const ka of freeA()) {
+    if (usedA.has(ka)) continue;
+    const cid = built[ka].cable_id;
+    const ca = freeA().filter((k) => built[k].cable_id === cid), ci = freeI().filter((k) => inv[k].cable_id === cid);
+    if (ca.length === 1 && ci.length === 1) pair(ka, ci[0], "endpoint");
+  }
+  const alias = {};
+  for (const ka of freeA()) {
+    if (usedA.has(ka)) continue;
+    const ci = freeI().filter((k) => sameEnds(inv[k], built[ka]));
+    if (ci.length === 1) { alias[inv[ci[0]].cable_id] = built[ka].cable_id; pair(ka, ci[0], "rename"); }
+  }
+
+  const findings = [];
+  pairs.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  for (const [ka, ki, how] of pairs) {
+    const a = built[ka], i = inv[ki];
+    const record = `${a.cable_id} ${a.from} to ${a.to}`, where = { cable_id: a.cable_id, from: a.from, to: a.to };
+    if (how === "rename") findings.push(finding("ID_MISMATCH", "low", record, "cable_id", a.cable_id, i.cable_id,
+      `Same endpoints, different name: as-built calls it ${a.cable_id}, inventory calls it ${i.cable_id}.`,
+      `Confirm they are the same cable, then rename ${i.cable_id} or record the alias.`, where));
+    if (how === "endpoint") findings.push(finding("ENDPOINT", "medium", record, "endpoints", `${a.from} to ${a.to}`, `${i.from} to ${i.to}`,
+      `${a.cable_id} was built ${a.from} to ${a.to}. Inventory shows ${i.from} to ${i.to}.`,
+      `Move ${a.cable_id} in GIS to ${a.from} to ${a.to} and update its length to ${none(a.length_ft)} ft.`,
+      Object.assign({}, where, { inv_from: i.from, inv_to: i.to })));
+    if (a.fiber_count != null && i.fiber_count != null && a.fiber_count !== i.fiber_count)
+      findings.push(finding("FIBER_COUNT", "high", record, "fiber_count", a.fiber_count, i.fiber_count,
+        `${a.cable_id} was built as ${a.fiber_count}F. Inventory shows ${i.fiber_count}F.`,
+        `Set fiber_count to ${a.fiber_count} and add the new strands to the fiber records.`, where));
+    if (how !== "endpoint" && a.length_ft && i.length_ft) {
+      const diff = Math.abs(a.length_ft - i.length_ft) / i.length_ft;
+      if (diff > tolerance) findings.push(finding("LENGTH", "medium", record, "length_ft", a.length_ft, i.length_ft,
+        `Length is off by ${(diff * 100).toFixed(1)}%: ${a.length_ft} ft built, ${i.length_ft} ft in inventory.`,
+        `Set length_ft to ${a.length_ft} and redraw the route if it changed.`, where));
+    }
+    if (a.placement && i.placement && a.placement !== i.placement)
+      findings.push(finding("PLACEMENT", "medium", record, "placement", a.placement, i.placement,
+        `Built ${a.placement}. Inventory shows ${i.placement}.`,
+        `Set placement to ${a.placement} and attach the span to the right support structure.`, where));
+  }
+  for (const ka of freeA()) {
+    const a = built[ka];
+    findings.push(finding("MISSING_IN_INVENTORY", "high", `${a.cable_id} ${a.from} to ${a.to}`, "record",
+      `${none(a.fiber_count)}F, ${none(a.length_ft)} ft`, "none", `${a.cable_id} was built and is not in the inventory.`,
+      `Add ${a.cable_id} (${none(a.fiber_count)}F, ${a.from} to ${a.to}, ${none(a.length_ft)} ft).`,
+      { cable_id: a.cable_id, from: a.from, to: a.to }));
+  }
+  for (const ki of freeI()) {
+    const i = inv[ki], cancelled = notBuilt.has(i.cable_id);
+    findings.push(finding(cancelled ? "NOT_BUILT" : "NOT_IN_ASBUILT", "medium", `${i.cable_id} ${i.from} to ${i.to}`, "record",
+      cancelled ? "not built" : "no record", `${none(i.fiber_count)}F, ${none(i.length_ft)} ft`,
+      `${i.cable_id} is in the inventory. ` + (cancelled ? "The as-built says it was not built." : "The as-built does not mention it."),
+      cancelled ? `Remove ${i.cable_id} or mark it as not built.` : `Ask the field whether ${i.cable_id} exists before changing GIS.`,
+      { cable_id: i.cable_id, from: i.from, to: i.to, inventory_only: true }));
+  }
+
+  const sa = new Map((asbuilt.splices || []).map((s) => [norm(s.branch_cable), s]));
+  const si = new Map((inventory.splices || []).map((s) => [alias[norm(s.branch_cable)] || norm(s.branch_cable), s]));
+  const eq = (x, y) => x[0] === y[0] && x[1] === y[1];
+  for (const [br, a] of sa) {
+    const at = `${norm(a.closure_id)} at ${norm(a.structure)}`, where = { structure: norm(a.structure), cable_id: br };
+    if (!si.has(br)) {
+      findings.push(finding("SPLICE_MISSING_IN_INVENTORY", "high", `Splice to ${br}`, "record",
+        `${at}: backbone ${rng(a.backbone_fibers)} to ${br} ${rng(a.branch_fibers)}`, "none", `The splice feeding ${br} is not in the inventory.`,
+        `Add the splice at ${at}: backbone ${rng(a.backbone_fibers)} to ${br} ${rng(a.branch_fibers)}.`, where));
+      continue;
+    }
+    const i = si.get(br), diffs = [];
+    if (norm(a.structure) !== norm(i.structure) || norm(a.closure_id) !== norm(i.closure_id)) diffs.push(`location ${at} vs ${norm(i.closure_id)} at ${norm(i.structure)}`);
+    if (!eq(a.backbone_fibers, i.backbone_fibers)) diffs.push(`backbone fibers ${rng(a.backbone_fibers)} vs ${rng(i.backbone_fibers)}`);
+    if (!eq(a.branch_fibers, i.branch_fibers)) diffs.push(`branch fibers ${rng(a.branch_fibers)} vs ${rng(i.branch_fibers)}`);
+    if (diffs.length) findings.push(finding("SPLICE_MISMATCH", "high", `Splice to ${br}`, "fiber assignment",
+      `${at}: backbone ${rng(a.backbone_fibers)} to ${br} ${rng(a.branch_fibers)}`,
+      `${norm(i.closure_id)} at ${norm(i.structure)}: backbone ${rng(i.backbone_fibers)} to ${br} ${rng(i.branch_fibers)}`,
+      `Fiber assignment for ${br} disagrees (as-built vs inventory): ${diffs.join("; ")}.`,
+      `Update the splice record to ${at}, backbone ${rng(a.backbone_fibers)} to ${br} ${rng(a.branch_fibers)}. Check circuits assigned on the old fibers.`, where));
+  }
+  for (const [br, i] of si) {
+    if (!sa.has(br)) findings.push(finding("SPLICE_NOT_IN_ASBUILT", notBuilt.has(br) ? "medium" : "high", `Splice to ${br}`, "record", "no record",
+      `${norm(i.closure_id)} at ${norm(i.structure)}: backbone ${rng(i.backbone_fibers)}`, `Inventory has a splice feeding ${br}. The as-built has none.`,
+      notBuilt.has(br) ? "Remove it with the cable." : "Confirm in the field before assigning these fibers.", { structure: norm(i.structure), cable_id: br }));
+  }
+  const spl = asbuilt.splices || [];
+  for (let x = 0; x < spl.length; x++) for (let y = x + 1; y < spl.length; y++) {
+    const a = spl[x], b = spl[y];
+    if (norm(a.backbone_cable) === norm(b.backbone_cable) && a.backbone_fibers[0] <= b.backbone_fibers[1] && b.backbone_fibers[0] <= a.backbone_fibers[1])
+      findings.push(finding("DOUBLE_ASSIGNED", "high", `${norm(a.backbone_cable)} fibers`, "backbone_fibers",
+        `${rng(a.backbone_fibers)} to ${norm(a.branch_cable)} and ${rng(b.backbone_fibers)} to ${norm(b.branch_cable)}`, "n/a",
+        `The as-built puts overlapping backbone fibers on ${norm(a.branch_cable)} and ${norm(b.branch_cable)}.`,
+        "Send back to the splicer. One of the two records is wrong.", { structure: norm(a.structure) }));
+  }
+  const sorted = findings.map((f, k) => [f, k]).sort((p, q) => SEVERITY_ORDER[p[0].severity] - SEVERITY_ORDER[q[0].severity] || p[1] - q[1]).map((p) => p[0]);
+  sorted.forEach((f, k) => { f.n = k + 1; });
+  const counts = { high: 0, medium: 0, low: 0 };
+  sorted.forEach((f) => { counts[f.severity] += 1; });
+  let both = 0; for (const k of sa.keys()) if (si.has(k)) both += 1;
+  return { findings: sorted, counts, cables_compared: pairs.length, splices_compared: both, aliases: alias };
+}
+
+function score(extracted, reference) {
+  const same = (a, b) => {
+    if (typeof a === "string" || typeof b === "string") return norm(a) === norm(b);
+    if (typeof a === "number" && typeof b === "number") return Math.abs(a - b) < 0.5;
+    return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  };
+  const cableKey = (c) => c.status === "not_built" ? norm(c.cable_id) + "|not_built" : norm(c.cable_id) + "|" + [norm(c.from), norm(c.to)].sort().join("~");
+  const spliceKey = (s) => norm(s.closure_id) + "|" + norm(s.branch_cable);
+  const misses = []; let correct = 0, total = 0, found = 0, expected = 0, extra = 0;
+  for (const [name, key, fields] of [["cables", cableKey, ["fiber_count", "length_ft", "placement", "status"]], ["splices", spliceKey, ["structure", "backbone_fibers", "branch_fibers"]]]) {
+    const got = new Map((extracted[name] || []).map((r) => [key(r), r])), want = new Map((reference[name] || []).map((r) => [key(r), r]));
+    expected += want.size;
+    for (const k of got.keys()) if (!want.has(k)) extra += 1;
+    for (const [k, w] of want) {
+      const label = `${name.slice(0, -1)} ${k.split("|")[0]}`;
+      if (!got.has(k)) { misses.push(`${label}: not extracted`); total += fields.length; continue; }
+      found += 1;
+      for (const f of fields) { total += 1; if (same(got.get(k)[f], w[f])) correct += 1; else misses.push(`${label}: ${f} differs`); }
+    }
+  }
+  return { records_expected: expected, records_found: found, records_extra: extra, fields_correct: correct, fields_total: total,
+    field_accuracy: total ? Math.round((correct / total) * 10000) / 10000 : 1, misses_count: misses.length };
+}
+
+function correctionsText(result, project) {
+  const c = result.counts, rule = "=".repeat(64), n = result.findings.length;
+  const lines = ["CORRECTIONS FOR GIS", project ? `Project ${project}` : "Project not named",
+    `${n} correction${n === 1 ? "" : "s"}: ${c.high} high, ${c.medium} medium, ${c.low} low`, rule];
+  for (const sev of ["high", "medium", "low"]) {
+    const group = result.findings.filter((f) => f.severity === sev);
+    if (!group.length) continue;
+    lines.push("", `${sev.toUpperCase()} PRIORITY`, "-".repeat(64));
+    for (const f of group) lines.push(`${f.n}. ${f.record}`, `   Field      | ${f.field}`, `   GIS now    | ${f.inventory}`, `   Change to  | ${f.asbuilt}`, `   Action     | ${f.fix}`, "");
+  }
+  if (!n) lines.push("", "Nothing to correct. The inventory agrees with the as-built records.", "");
+  lines.push(rule, "End of corrections");
+  return lines.join("\n") + "\n";
+}
+
+
+
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const NS = "http://www.w3.org/2000/svg";
+function S(tag, attrs, text) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text !== undefined) e.textContent = text; return e; }
+const SEV = { high: "#ff5a52", medium: "#e3b53a", low: "#8fb3c9" };
+const worst = (fs) => fs.length ? fs.slice().sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])[0].severity : null;
+let csvText = "", records = REFERENCE, inventory = SAMPLE_INVENTORY, hasClaude = false, firstDraw = true;
+
+function drawLine(rec, result) {
+  const g = $("strip-g"); g.replaceChildren();
+  const add = (parent, tag, attrs, text) => { const n = S(tag, attrs, text); parent.append(n); return n; };
+  const flags = [];
+  const badge = (x, y, f) => flags.push([x, y, f]);
+  const paintFlags = () => flags.forEach(([x, y, f]) => {
+    const fg = add(g, "g", { class: "flag", "data-n": f.n, tabindex: 0, role: "button", "aria-label": "Finding " + f.n + ": " + f.record });
+    add(fg, "circle", { cx: x, cy: y, r: 10, fill: SEV[f.severity], stroke: "#101213", "stroke-width": 1.5 });
+    add(fg, "text", { x, y: y + 3.7, "text-anchor": "middle", class: "badge" }, String(f.n));
+    const go = () => { const t = document.getElementById("finding-" + f.n); if (t) { t.scrollIntoView({ behavior: "smooth", block: "center" }); hot(f.n, true); setTimeout(() => hot(f.n, false), 1600); } };
+    fg.addEventListener("click", go); fg.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    fg.addEventListener("mouseenter", () => hot(f.n, true)); fg.addEventListener("mouseleave", () => hot(f.n, false));
+  });
+  const built = (rec.cables || []).filter((c) => c.status !== "not_built" && c.from && c.to).map((c) => Object.assign({}, c, { cable_id: norm(c.cable_id), from: norm(c.from), to: norm(c.to) }));
+  const tally = {}; built.forEach((c) => { tally[c.cable_id] = (tally[c.cable_id] || 0) + 1; });
+  const bb = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+  const spans = built.filter((c) => c.cable_id === bb);
+  const deg = {}; spans.forEach((s) => { deg[s.from] = (deg[s.from] || 0) + 1; deg[s.to] = (deg[s.to] || 0) + 1; });
+  const chain = []; let cur = Object.keys(deg).sort().find((k) => deg[k] === 1), prev = null;
+  while (cur && chain.length <= spans.length) {
+    chain.push(cur);
+    const nxt = spans.map((s) => (s.from === cur ? s.to : s.to === cur ? s.from : null)).find((n) => n && n !== prev && !chain.includes(n));
+    prev = cur; cur = nxt;
+  }
+  if (chain.length < 2) { add(g, "text", { x: 500, y: 125, "text-anchor": "middle" }, "NOT ENOUGH RECORDS TO DRAW THE ROUTE"); return; }
+  const xs = {}; chain.forEach((s, k) => { xs[s] = 90 + k * (820 / (chain.length - 1)); });
+  const Y = 104, BY = 212, F = result.findings;
+  const same = (w, c) => (w.from === c.from && w.to === c.to) || (w.from === c.to && w.to === c.from);
+  const r = add(g, "g", { "clip-path": "url(#reveal)" });
+
+  spans.forEach((sp) => {
+    const x1 = Math.min(xs[sp.from], xs[sp.to]), x2 = Math.max(xs[sp.from], xs[sp.to]), mid = (x1 + x2) / 2;
+    const fs = F.filter((f) => !f.code.startsWith("SPLICE") && f.where.cable_id === bb && f.where.from && same(f.where, sp));
+    add(r, "line", { x1, y1: Y, x2, y2: Y, stroke: fs.length ? SEV[worst(fs)] : "var(--fiber)", "stroke-width": 4.5, "stroke-dasharray": sp.placement === "aerial" ? "12 7" : "none" });
+    add(g, "text", { x: mid, y: Y - 13, "text-anchor": "middle", class: "faint" }, (sp.length_ft != null ? Number(sp.length_ft).toLocaleString("en-US") + " FT" : "") + (sp.placement === "aerial" ? " · AERIAL" : ""));
+    fs.forEach((f, k) => badge(mid + (k - (fs.length - 1) / 2) * 22, Y + 20, f));
+  });
+
+  const byNode = {};
+  const put = (node, item) => { (byNode[node] = byNode[node] || []).push(item); };
+  built.filter((c) => c.cable_id !== bb).forEach((c) => {
+    const node = xs[c.from] !== undefined ? c.from : xs[c.to] !== undefined ? c.to : null;
+    if (node) put(node, { id: c.cable_id, far: node === c.from ? c.to : c.from, label: c.cable_id + (c.fiber_count ? " · " + c.fiber_count + "F" : ""),
+      fs: F.filter((f) => !f.code.startsWith("SPLICE") && f.where.cable_id === c.cable_id && !f.where.inventory_only) });
+  });
+  F.forEach((f) => {
+    if (f.where.inventory_only) { const node = xs[f.where.from] !== undefined ? f.where.from : f.where.to; if (xs[node] !== undefined) put(node, { ghost: true, far: node === f.where.from ? f.where.to : f.where.from, label: f.where.cable_id + " · GIS ONLY", fs: [f] }); }
+    if (f.code === "ENDPOINT") { const node = xs[f.where.inv_from] !== undefined ? f.where.inv_from : f.where.inv_to; if (xs[node] !== undefined) put(node, { ghost: true, far: "", label: f.where.cable_id + " (GIS)", fs: [] }); }
+  });
+  Object.keys(byNode).forEach((node) => {
+    const items = byNode[node], x = xs[node];
+    items.forEach((it, k) => {
+      let off = (k - (items.length - 1) / 2) * 132;
+      const lx = Math.max(40, Math.min(960, x + off));
+      const col = it.ghost ? "#7d8279" : it.fs.length ? SEV[worst(it.fs)] : "var(--lane)";
+      add(it.ghost ? g : r, "path", { d: `M${x} ${Y + 9}V${Y + 34}H${lx}V${BY - 9}`, fill: "none", stroke: col, "stroke-width": it.ghost ? 2 : 3, "stroke-dasharray": it.ghost ? "5 5" : "none", "stroke-linejoin": "round" });
+      add(g, "rect", { x: lx - 8, y: BY - 8, width: 16, height: 16, fill: it.ghost ? "none" : "#101213", stroke: col, "stroke-width": 1.5, "stroke-dasharray": it.ghost ? "3 3" : "none" });
+      add(g, "text", { x: lx, y: BY + 24, "text-anchor": "middle", class: it.ghost ? "faint" : "nodelab" }, it.label);
+      if (it.far) add(g, "text", { x: lx, y: BY + 38, "text-anchor": "middle", class: "faint" }, it.far);
+      it.fs.forEach((f, j) => badge(lx, Y + 58 + j * 22, f));
+    });
+  });
+
+  const spliceAt = new Set((rec.splices || []).map((s) => norm(s.structure)));
+  chain.forEach((s) => {
+    const x = xs[s];
+    add(g, "rect", { x: x - 10, y: Y - 10, width: 20, height: 20, fill: "#101213", stroke: "var(--lane)", "stroke-width": 1.8 });
+    if (spliceAt.has(s)) add(g, "path", { d: `M${x} ${Y - 6}l6 6l-6 6l-6 -6z`, fill: "var(--fiber)" });
+    add(g, "text", { x, y: Y - 34, "text-anchor": "middle", class: "nodelab" }, s);
+    const fs = F.filter((f) => (f.code.startsWith("SPLICE") || f.code === "DOUBLE_ASSIGNED") && f.where.structure === s);
+    fs.forEach((f, k) => badge(x + (k - (fs.length - 1) / 2) * 22, Y - 58, f));
+  });
+  add(g, "text", { x: 14, y: 276, class: "faint" }, "STRAIGHT-LINE DIAGRAM · NOT TO SCALE · " + bb);
+  paintFlags();
+  if (firstDraw) { $("strip").classList.add("draw"); firstDraw = false; }
+}
+
+function hot(n, on) {
+  document.querySelectorAll('.flag[data-n="' + n + '"]').forEach((e) => e.classList.toggle("hot", on));
+  const row = document.getElementById("finding-" + n); if (row) row.classList.toggle("hot", on);
+}
+function stat(kind, big, small) { const s = el("div", "stat " + kind); s.append(el("b", "", big), el("span", "", small)); return s; }
+function table(node, head, rows, cls) {
+  node.replaceChildren();
+  const tr = el("tr"); head.forEach((h) => tr.append(el("th", "", h))); node.append(tr);
+  rows.forEach((cells, k) => { const row = el("tr", cls ? cls(k) : ""); cells.forEach((c, j) => row.append(el("td", j === 0 ? "mono" : "", c === null || c === undefined ? "" : String(c)))); node.append(row); });
+}
+
+function render() {
+  const tol = Number($("tol").value);
+  $("tol-out").textContent = tol + "%";
+  const result = reconcile(records, inventory, tol / 100);
+  drawLine(records, result);
+
+  const sum = $("summary"); sum.replaceChildren();
+  sum.append(stat(result.findings.length ? "" : "good", String(result.findings.length), "places the GIS disagrees with what was built"));
+  sum.append(stat(result.counts.high ? "bad" : "good", String(result.counts.high), "high severity: fiber counts, missing cables, splice assignments"));
+  sum.append(stat("", String(result.cables_compared + result.splices_compared), result.cables_compared + " cable records and " + result.splices_compared + " splices matched and compared"));
+
+  const box = $("findings"); box.replaceChildren();
+  const head = el("div", "head"); const hl = el("div"); hl.append(el("div", "kicker", records.project ? "Project " + records.project : "Your project"), el("h2", "", "Findings"));
+  head.append(hl, el("p", "note", "Worst first. Numbers match the flags on the diagram.")); box.append(head);
+  if (!result.findings.length) box.append(el("p", "note", "The inventory agrees with the as-built records."));
+  else {
+    const bar = el("div", "sevbar"), key = el("div", "sevkey"), tot = result.findings.length;
+    [["high", "h"], ["medium", "m"], ["low", "l"]].forEach(([sv, c]) => {
+      if (result.counts[sv]) { const i = el("i", c); i.style.width = (result.counts[sv] / tot * 100) + "%"; bar.append(i); }
+      const k = el("span"); k.append(el("b", "", String(result.counts[sv])), document.createTextNode(" " + sv)); key.append(k);
+    });
+    box.append(bar, key);
+  }
+  const g = el("div", "group");
+  for (const f of result.findings) {
+    const row = el("div", "find " + f.severity); row.id = "finding-" + f.n;
+    row.addEventListener("mouseenter", () => hot(f.n, true)); row.addEventListener("mouseleave", () => hot(f.n, false));
+    row.append(el("div", "num", String(f.n)));
+    const mid = el("div"); mid.append(el("div", "t", f.record), el("div", "d", f.message));
+    const fix = el("div", "fix"); fix.append(el("b", "", "Fix: "), document.createTextNode(f.fix)); mid.append(fix);
+    const diff = el("div", "diff"); diff.append(el("span", "tag", "GIS"), el("span", "was", String(f.inventory)), el("span", "arrow", "\u2192"), el("span", "tag", "Built"), el("span", "now", String(f.asbuilt))); mid.append(diff);
+    row.append(mid, el("span", "pill sev-" + f.severity, f.severity));
+    g.append(row);
+  }
+  box.append(g);
+
+  const cables = records.cables || [];
+  table($("t-cables"), ["Cable", "Fibers", "From", "To", "Length ft", "Placement", "Status"],
+    cables.map((c) => [c.cable_id, c.fiber_count, c.from, c.to, c.length_ft, c.placement, c.status === "not_built" ? "not built" : "built"]),
+    (k) => (cables[k].status === "not_built" ? "nb" : ""));
+  table($("t-splices"), ["Closure", "At", "Backbone fibers", "Branch", "Branch fibers"],
+    (records.splices || []).map((s) => [s.closure_id, s.structure, rng(s.backbone_fibers), s.branch_cable, rng(s.branch_fibers)]));
+
+  const q = (v) => { const t = String(v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+  csvText = ["n,severity,record,field,inventory_value,asbuilt_value,action"].concat(
+    result.findings.map((f) => [f.n, f.severity, f.record, f.field, f.inventory, f.asbuilt, f.fix].map(q).join(","))).join("\n");
+  $("fixes").textContent = correctionsText(result, records.project);
+}
+
+function setStatus(text, cls) { const s = $("status"); s.textContent = text; s.className = "status" + (cls ? " " + cls : ""); }
+
+function checkShape(rec) {
+  if (!rec || !Array.isArray(rec.cables) || !Array.isArray(rec.splices)) throw new Error("no cables or splices list");
+  rec.cables.forEach((c) => { if (!c.cable_id) throw new Error("a cable has no id"); });
+  rec.splices.forEach((s) => { for (const k of ["backbone_fibers", "branch_fibers"]) if (!Array.isArray(s[k]) || s[k].length !== 2) throw new Error("a splice has a bad fiber range"); if (!s.branch_cable || !s.structure || !s.closure_id) throw new Error("a splice is missing a field"); });
+  return rec;
+}
+
+const KEY_MSG = "Showing the answer key: the records I pulled from these notes by hand.";
+function invNote(msg, cls) {
+  const n = $("inv-note");
+  n.textContent = msg || (inventory === SAMPLE_INVENTORY
+    ? "Sample inventory: " + inventory.cables.length + " cable records and " + inventory.splices.length + " splice records from a design-stage GIS export that was never updated after construction."
+    : "Your inventory: " + inventory.cables.length + " cable records and " + inventory.splices.length + " splice records.");
+  n.className = "status" + (cls ? " " + cls : inventory === SAMPLE_INVENTORY ? "" : " live");
+}
+
+function loadScript(src) {
+  return new Promise((ok, fail) => { const t = document.createElement("script"); t.src = src; t.onload = ok; t.onerror = () => fail(new Error("could not load the PDF reader")); document.head.append(t); });
+}
+async function pdfText(file) {
+  if (!window.pdfjsLib) { await loadScript(PDFJS.lib); await loadScript(PDFJS.worker); }
+  const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const out = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const items = (await (await pdf.getPage(n)).getTextContent()).items.filter((i) => i.str && i.str.trim());
+    const rows = new Map();
+    for (const i of items) { const y = Math.round(i.transform[5] / 3) * 3; if (!rows.has(y)) rows.set(y, []); rows.get(y).push(i); }
+    [...rows.keys()].sort((a, b) => b - a).forEach((y) => out.push(rows.get(y).sort((a, b) => a.transform[4] - b.transform[4]).map((i) => i.str).join(" ")));
+  }
+  const text = out.join("\n");
+  if (text.replace(/\s/g, "").length < 20) throw new Error("this PDF has no text layer, so it is probably a scan and needs OCR first");
+  return text;
+}
+
+function parseCsv(text) {
+  const rows = []; let row = [], cell = "", q = false;
+  for (let k = 0; k < text.length; k++) {
+    const ch = text[k];
+    if (q) { if (ch === '"' && text[k + 1] === '"') { cell += '"'; k++; } else if (ch === '"') q = false; else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[k + 1] === "\n") k++; row.push(cell); cell = ""; if (row.some((c) => c.trim())) rows.push(row); row = []; }
+    else cell += ch;
+  }
+  row.push(cell); if (row.some((c) => c.trim())) rows.push(row);
+  return rows;
+}
+const FT_PER_M = 3.280839895;
+function haversineFt(a, b) {
+  const R = 20902231, t = Math.PI / 180, dLat = (b[1] - a[1]) * t, dLon = (b[0] - a[0]) * t;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * t) * Math.cos(b[1] * t) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const pathFt = (pts, geo, unit) => { let d = 0; for (let k = 1; k < pts.length; k++) d += geo ? haversineFt(pts[k - 1], pts[k]) : Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]) * unit; return d; };
+
+async function unzip(file) {
+  if (!window.JSZip) await loadScript(JSZIP_URL);
+  return window.JSZip.loadAsync(await file.arrayBuffer());
+}
+function parseDbf(buf) {
+  const v = new DataView(buf), n = v.getUint32(4, true), headLen = v.getUint16(8, true), recLen = v.getUint16(10, true), dec = new TextDecoder("utf-8"), fields = [];
+  for (let o = 32; o < headLen - 1 && v.getUint8(o) !== 0x0d; o += 32) {
+    let name = ""; for (let k = 0; k < 11; k++) { const ch = v.getUint8(o + k); if (!ch) break; name += String.fromCharCode(ch); }
+    fields.push({ name: name.trim(), type: String.fromCharCode(v.getUint8(o + 11)), len: v.getUint8(o + 16) });
+  }
+  const rows = [];
+  for (let r = 0; r < n; r++) {
+    let o = headLen + r * recLen; if (o + recLen > buf.byteLength) break;
+    const deleted = v.getUint8(o) === 0x2a; o += 1; const row = {};
+    for (const f of fields) {
+      const raw = dec.decode(new Uint8Array(buf, o, f.len)).trim(); o += f.len;
+      row[f.name] = raw === "" ? null : (f.type === "N" || f.type === "F") && !isNaN(Number(raw)) ? Number(raw) : raw;
+    }
+    rows.push(deleted ? null : row);
+  }
+  return { fields: fields.map((f) => f.name), rows };
+}
+function parseShpLines(buf) {
+  const v = new DataView(buf), out = []; let o = 100;
+  while (o + 8 <= buf.byteLength) {
+    const words = v.getInt32(o + 4, false), c = o + 8; o = c + words * 2;
+    const type = v.getInt32(c, true);
+    if (![3, 13, 23].includes(type)) { out.push(null); continue; }
+    const parts = v.getInt32(c + 36, true), pts = v.getInt32(c + 40, true), idx = [];
+    for (let k = 0; k < parts; k++) idx.push(v.getInt32(c + 44 + 4 * k, true));
+    idx.push(pts); const base = c + 44 + 4 * parts, lines = [];
+    for (let k = 0; k < parts; k++) { const line = []; for (let q = idx[k]; q < idx[k + 1]; q++) line.push([v.getFloat64(base + 16 * q, true), v.getFloat64(base + 16 * q + 8, true)]); lines.push(line); }
+    out.push(lines);
+  }
+  return out;
+}
+async function sourceFromShapeZip(file) {
+  const zip = await unzip(file), names = Object.keys(zip.files), pick = (ext) => names.find((n) => n.toLowerCase().endsWith(ext) && !n.startsWith("__MACOSX"));
+  const dbfName = pick(".dbf"), shpName = pick(".shp"), prjName = pick(".prj");
+  if (!dbfName) throw new Error("the zip has no .dbf file, which is where a shapefile keeps its attributes");
+  const dbf = parseDbf(await zip.file(dbfName).async("arraybuffer"));
+  let geomFt = null, note = "";
+  if (shpName) {
+    const shapes = parseShpLines(await zip.file(shpName).async("arraybuffer")), prj = prjName ? await zip.file(prjName).async("string") : "";
+    const flat = shapes.filter(Boolean).flat(2), looksGeo = flat.length > 0 && flat.every((p) => Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90);
+    const geo = prj ? !/PROJCS/i.test(prj) : looksGeo;
+    const units = prj.match(/UNIT\["([^"]+)"/gi) || [], last = (units[units.length - 1] || "").toLowerCase();
+    const unit = geo ? 1 : /f(oo|ee)t/.test(last) ? 1 : /met/.test(last) ? FT_PER_M : 1;
+    if (!prj) note = geo ? " No .prj in the zip, so I treated coordinates as longitude and latitude." : " No .prj in the zip, so I treated coordinates as feet.";
+    geomFt = shapes.map((s) => (s ? s.reduce((d, line) => d + pathFt(line, geo, unit), 0) : null));
+  }
+  const keep = dbf.rows.map((r, k) => [r, geomFt ? geomFt[k] : null]).filter(([r]) => r);
+  return { name: file.name, fields: dbf.fields, rows: keep.map(([r]) => r), geomFt: geomFt ? keep.map(([, g]) => g) : null, note };
+}
+function sourceFromKml(text, name) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("the KML could not be parsed");
+  const tags = (node, tag) => Array.from(node.getElementsByTagNameNS("*", tag));
+  const rows = [], geomFt = [], fields = [];
+  const note = (k) => { if (!fields.includes(k)) fields.push(k); };
+  for (const pm of tags(doc, "Placemark")) {
+    const lines = tags(pm, "LineString"); if (!lines.length) continue;
+    const row = {}; const nm = tags(pm, "name")[0]; if (nm) { row.name = nm.textContent.trim(); note("name"); }
+    for (const d of tags(pm, "Data")) { const v = tags(d, "value")[0]; const k = d.getAttribute("name"); if (k) { row[k] = v ? v.textContent.trim() : null; note(k); } }
+    for (const d of tags(pm, "SimpleData")) { const k = d.getAttribute("name"); if (k) { row[k] = d.textContent.trim(); note(k); } }
+    const desc = tags(pm, "description")[0];
+    if (desc && /<t[dr]/i.test(desc.textContent)) {
+      const html = new DOMParser().parseFromString(desc.textContent, "text/html");
+      html.querySelectorAll("tr").forEach((tr) => { const td = tr.querySelectorAll("td,th"); if (td.length === 2 && td[0].textContent.trim()) { const k = td[0].textContent.trim(); if (!(k in row)) { row[k] = td[1].textContent.trim(); note(k); } } });
+    }
+    let ft = 0;
+    for (const ls of lines) { const c = tags(ls, "coordinates")[0]; if (!c) continue; const pts = c.textContent.trim().split(/\s+/).map((t) => t.split(",").map(Number)).filter((p) => p.length >= 2 && !p.some(isNaN)); ft += pathFt(pts, true, 1); }
+    rows.push(row); geomFt.push(ft);
+  }
+  if (!rows.length) throw new Error("no lines found in the KML (cables must be LineString placemarks)");
+  const thin = fields.length <= 1 ? " This file carries names only, with no attribute columns, so there is little to compare." : "";
+  return { name, fields, rows, geomFt, note: thin };
+}
+function sourceFromGeojson(text, name) {
+  const data = JSON.parse(text);
+  if (!data || !Array.isArray(data.features)) throw new Error("not a GeoJSON feature collection");
+  let feats = data.features.filter((f) => f && f.properties);
+  if (feats.some((f) => f.properties.layer !== undefined)) feats = feats.filter((f) => f.properties.layer === "cable");
+  else feats = feats.filter((f) => !f.geometry || /LineString/.test(f.geometry.type));
+  if (!feats.length) throw new Error("no cable features found");
+  const fields = []; feats.forEach((f) => Object.keys(f.properties).forEach((k) => { if (!fields.includes(k)) fields.push(k); }));
+  const geomFt = feats.map((f) => { const g = f.geometry; if (!g) return null; const lines = g.type === "LineString" ? [g.coordinates] : g.type === "MultiLineString" ? g.coordinates : []; return lines.length ? lines.reduce((d, l) => d + pathFt(l, true, 1), 0) : null; });
+  return { name, fields, rows: feats.map((f) => f.properties), geomFt: geomFt.some((v) => v) ? geomFt : null, note: "" };
+}
+function sourceFromCsvRows(rows, name) {
+  const head = rows[0].map((h) => h.trim());
+  return { name, fields: head, rows: rows.slice(1).map((r) => Object.fromEntries(head.map((h, k) => [h, (r[k] || "").trim() || null]))), geomFt: null, note: "" };
+}
+
+const TARGETS = [
+  ["cable_id", "Cable ID", true, ["cableid", "cablename", "cblname", "cable", "sheathid", "segmentid", "name", "id"]],
+  ["fiber_count", "Fiber count", false, ["fibercount", "fibercnt", "numfibers", "strandcount", "strands", "fibers", "count", "size"]],
+  ["from", "From structure", true, ["fromstruct", "fromstructure", "fromid", "aend", "astruct", "alocation", "startstruct", "from", "start"]],
+  ["to", "To structure", true, ["tostruct", "tostructure", "toid", "zend", "zstruct", "zlocation", "endstruct", "to", "end"]],
+  ["length_ft", "Length (ft)", false, ["lengthft", "sheathft", "sheathlength", "footage", "measuredlength", "calclength", "length", "shapelength", "len"]],
+  ["placement", "Placement", false, ["placement", "placementtype", "installtype", "install", "construction", "method", "type"]],
+];
+const squash = (t) => String(t).toLowerCase().replace(/[^a-z0-9]/g, "");
+function guessMap(fields) {
+  const map = {}, taken = new Set();
+  for (const pass of ["exact", "contains"]) for (const [key, , , syn] of TARGETS) {
+    if (map[key]) continue;
+    let hit = null;
+    for (const s of syn) { hit = fields.find((f) => !taken.has(f) && (pass === "exact" ? squash(f) === s : s.length > 3 && squash(f).includes(s))); if (hit) break; }
+    if (hit) { map[key] = hit; taken.add(hit); }
+  }
+  return map;
+}
+let rawSource = null, fieldMap = {};
+function cablesFromSource() {
+  const miss = TARGETS.filter(([k, , req]) => req && !fieldMap[k]).map(([, label]) => label);
+  if (miss.length) throw new Error("pick the column for: " + miss.join(", "));
+  const val = (row, k) => (fieldMap[k] && fieldMap[k] !== "__geom" ? row[fieldMap[k]] : null);
+  const num = (v) => { if (v === null || v === undefined || v === "") return null; const m = String(v).replace(/,/g, "").match(/-?\d+(\.\d+)?/); return m ? Number(m[0]) : null; };
+  const place = (v) => { const t = String(v || "").toLowerCase(); return /aer|strand|pole|overhead/.test(t) ? "aerial" : /ug|under|bur|duct|conduit|bore|trench/.test(t) ? "underground" : null; };
+  const cables = rawSource.rows.map((row, k) => {
+    const fc = num(val(row, "fiber_count")), len = fieldMap.length_ft === "__geom" ? (rawSource.geomFt && rawSource.geomFt[k] ? Math.round(rawSource.geomFt[k]) : null) : num(val(row, "length_ft"));
+    const s = (v) => (v === null || v === undefined ? null : String(v).trim() || null);
+    return { cable_id: s(val(row, "cable_id")), fiber_count: fc === null ? null : Math.round(fc), from: s(val(row, "from")), to: s(val(row, "to")), length_ft: len, placement: place(val(row, "placement")) };
+  }).filter((c) => c.cable_id && c.from && c.to);
+  if (!cables.length) throw new Error("no rows have a cable ID and both ends with that column choice");
+  return { cables, skipped: rawSource.rows.length - cables.length };
+}
+function drawMapper() {
+  const box = $("map-rows"); box.replaceChildren(); $("mapper").hidden = !rawSource; if (!rawSource) return;
+  for (const [key, label, req] of TARGETS) {
+    const row = el("label", "maprow" + (req ? " need" : "")); row.append(el("span", "", label));
+    const sel = document.createElement("select"); sel.id = "map-" + key;
+    const opt = (v, t) => { const o = el("option", "", t); o.value = v; sel.append(o); };
+    opt("", req ? "Choose a column" : "Not in my file");
+    if (key === "length_ft" && rawSource.geomFt) opt("__geom", "Measure from the line");
+    rawSource.fields.forEach((f) => opt(f, f));
+    sel.value = fieldMap[key] || "";
+    sel.addEventListener("change", () => { fieldMap[key] = sel.value; applySource(); });
+    row.append(sel); box.append(row);
+  }
+}
+function applySource() {
+  try {
+    const { cables, skipped } = cablesFromSource();
+    inventory = { cables, splices: pendingSplices || (inventory === SAMPLE_INVENTORY ? [] : inventory.splices) };
+    $("reset-all").hidden = false;
+    invNote("Your inventory from " + rawSource.name + ": " + cables.length + " cable records and " + inventory.splices.length + " splice records." +
+      (skipped ? " " + skipped + " rows skipped for a missing ID or end." : "") + (fieldMap.length_ft === "__geom" ? " Lengths are measured from the lines." : "") + (rawSource.note || ""), "live");
+    render();
+  } catch (err) { invNote("Almost there: " + err.message + "." + (rawSource.note || "") + " The previous inventory is still in use.", "err"); }
+}
+async function readCableSource(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".zip")) return sourceFromShapeZip(file);
+  if (name.endsWith(".kmz")) { const zip = await unzip(file), k = Object.keys(zip.files).find((n) => n.toLowerCase().endsWith(".kml")); if (!k) throw new Error("the .kmz has no .kml inside"); return sourceFromKml(await zip.file(k).async("string"), file.name); }
+  if (name.endsWith(".kml")) return sourceFromKml(await file.text(), file.name);
+  return sourceFromGeojson(await file.text(), file.name);
+}
+function splicesFromCsv(text) {
+  const rows = parseCsv(text), need = ["closure_id", "structure", "backbone_cable", "bb_start", "bb_end", "branch_cable", "br_start", "br_end"];
+  if (!rows.length) throw new Error("the splice file is empty");
+  const head = rows[0].map((h) => h.trim().toLowerCase()), miss = need.filter((n) => !head.includes(n));
+  if (miss.length) throw new Error("the splice file is missing columns: " + miss.join(", "));
+  const col = (r, n) => (r[head.indexOf(n)] || "").trim();
+  return rows.slice(1).map((r, k) => {
+    const nums = ["bb_start", "bb_end", "br_start", "br_end"].map((n) => Number(col(r, n)));
+    if (nums.some((v) => !Number.isInteger(v))) throw new Error("splice row " + (k + 2) + " has a fiber number that is not a whole number");
+    return { closure_id: col(r, "closure_id"), structure: col(r, "structure"), backbone_cable: col(r, "backbone_cable"), backbone_fibers: [nums[0], nums[1]], branch_cable: col(r, "branch_cable"), branch_fibers: [nums[2], nums[3]] };
+  });
+}
+
+async function takeNotesFile(file) {
+  const name = file.name.toLowerCase();
+  try {
+    if (name.endsWith(".json")) {
+      records = checkShape(JSON.parse(await file.text()));
+      setStatus("Loaded " + records.cables.length + " cable records and " + records.splices.length + " splices from " + file.name + ".", "live");
+      $("useref").hidden = !hasClaude; $("reset-all").hidden = false; render(); return;
+    }
+    const text = name.endsWith(".pdf") ? await pdfText(file) : await file.text();
+    $("notes").value = text.trim();
+    $("reset-all").hidden = false;
+    setStatus("Loaded " + file.name + " (" + text.trim().split("\n").length + " lines). " + (hasClaude
+      ? "Press Extract with Claude to read it. The records below are still the previous ones."
+      : "Reading notes needs Claude, which is not available in this view. Sign in to Claude, or run the extract command from the repository and drop the records .json here. The records below are still the previous ones."), hasClaude ? "" : "err");
+  } catch (err) { setStatus("Could not use " + file.name + ": " + (err && err.message ? err.message : "unreadable file") + ".", "err"); }
+}
+async function takeInventoryFiles(files) {
+  try {
+    let source = null;
+    for (const file of files) {
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        const text = await file.text(), rows = parseCsv(text);
+        if (!rows.length) throw new Error(file.name + " is empty");
+        if (rows[0].map((h) => h.trim().toLowerCase()).includes("bb_start")) pendingSplices = splicesFromCsv(text);
+        else source = sourceFromCsvRows(rows, file.name);
+      } else source = await readCableSource(file);
+    }
+    if (source) { rawSource = source; fieldMap = guessMap(source.fields); if (!fieldMap.length_ft && source.geomFt) fieldMap.length_ft = "__geom"; drawMapper(); applySource(); return; }
+    if (rawSource) { applySource(); return; }
+    if (inventory !== SAMPLE_INVENTORY) { inventory = { cables: inventory.cables, splices: pendingSplices }; invNote(); render(); return; }
+    invNote("Splices loaded (" + pendingSplices.length + "). Now add the cable file; until then the sample inventory is still in use.", "err");
+  } catch (err) { invNote("Could not use that inventory: " + (err && err.message ? err.message : "unreadable file") + ". The previous inventory is still in use.", "err"); }
+}
+let pendingSplices = null;
+function wireUploads() {
+  const zone = (id, input, handler, many) => {
+    const d = $(id);
+    ["dragenter", "dragover"].forEach((t) => d.addEventListener(t, (e) => { e.preventDefault(); d.classList.add("over"); }));
+    ["dragleave", "drop"].forEach((t) => d.addEventListener(t, (e) => { e.preventDefault(); d.classList.remove("over"); }));
+    d.addEventListener("drop", (e) => { const f = Array.from(e.dataTransfer.files); if (f.length) handler(many ? f : f[0]); });
+    $(input).addEventListener("change", (e) => { const f = Array.from(e.target.files); if (f.length) handler(many ? f : f[0]); e.target.value = ""; });
+  };
+  zone("drop-notes", "notes-input", takeNotesFile, false);
+  zone("drop-inv", "inv-input", takeInventoryFiles, true);
+  $("pick-notes").addEventListener("click", () => $("notes-input").click());
+  $("pick-inv").addEventListener("click", () => $("inv-input").click());
+  $("reset-all").addEventListener("click", () => {
+    records = REFERENCE; inventory = SAMPLE_INVENTORY; pendingSplices = null; rawSource = null; fieldMap = {}; drawMapper(); $("notes").value = NOTES;
+    $("reset-all").hidden = true; $("useref").hidden = true; setStatus(KEY_MSG); invNote(); render();
+  });
+}
+
+function init() {
+  $("notes").value = NOTES;
+  invNote();
+  setStatus(KEY_MSG);
+  wireUploads();
+  $("tol").addEventListener("input", render);
+  $("controls").addEventListener("submit", (e) => e.preventDefault());
+  const copyOut = async (text, what) => {
+    try { await navigator.clipboard.writeText(text); $("copy-note").textContent = what + " copied."; }
+    catch (e) { $("copy-note").textContent = "Copy was blocked. Select the text and copy it by hand."; }
+  };
+  $("copy").addEventListener("click", () => copyOut($("fixes").textContent, "Text"));
+  $("copy-csv").addEventListener("click", () => copyOut(csvText, "CSV"));
+  render();
+  lightUpClaude();
+}
+
+async function lightUpClaude() {
+  let sample = null;
+  try { if (window.claude && typeof window.claude.use === "function") sample = await window.claude.use("sample"); } catch (e) { sample = null; }
+  if (!sample) return;
+  hasClaude = true;
+  $("run").hidden = false;
+  $("run").addEventListener("click", async () => {
+    const btn = $("run"), notes = $("notes").value; btn.disabled = true; setStatus("Claude is reading the notes.");
+    try {
+      const out = await sample(PROMPT.replace("{notes}", notes), { modelTier: "default", cache: false });
+      let raw = out.text.trim(); if (raw.startsWith("```")) raw = raw.slice(raw.indexOf("\n") + 1, raw.lastIndexOf("```"));
+      records = checkShape(JSON.parse(raw));
+      if (notes.trim() === NOTES.trim()) {
+        const s = score(records, REFERENCE);
+        setStatus("Read by Claude just now. " + s.fields_correct + " of " + s.fields_total + " fields match the answer key (" + (s.field_accuracy * 100).toFixed(0) + "%), " +
+          s.records_found + " of " + s.records_expected + " records found" + (s.records_extra ? ", " + s.records_extra + " extra" : "") + ".", "live");
+      } else setStatus("Read by Claude just now from your edited notes. There is no answer key for edited notes, so check the records below.", "live");
+      $("useref").hidden = false; render();
+    } catch (err) {
+      if (err && err.code === "not_granted") { document.querySelectorAll(".ai").forEach((n) => { n.hidden = true; }); setStatus(KEY_MSG); }
+      else setStatus(err && err.code === "rate_limited" ? "Claude is busy. Try again in a minute. Still showing the previous records." : "Claude's reply could not be used (" + (err && err.message ? err.message : "unknown error") + "). Still showing the previous records.", "err");
+    } finally { btn.disabled = false; }
+  });
+  $("useref").addEventListener("click", () => { records = REFERENCE; $("useref").hidden = true; setStatus(KEY_MSG + ($("notes").value.trim() === NOTES.trim() ? "" : " They belong to the sample notes, not the notes in the box.")); render(); });
+}
+
+init();
+</script>
+</body>
+</html>

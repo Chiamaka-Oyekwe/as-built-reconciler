@@ -24,4 +24,7 @@ html = html.replace("/*__PDFJS__*/", js({
 html = html.replace("/*__JSZIP__*/", js("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"))
 html = html.replace("/*__REPO__*/", REPO)
 (HERE / "index.html").write_text(html)
+# GitHub Pages serves the docs/ folder, so anyone can open the demo without an account.
+(ROOT / "docs").mkdir(exist_ok=True)
+(ROOT / "docs" / "index.html").write_text(html)
 print(f"wrote demo/index.html ({len(html):,} bytes)")
