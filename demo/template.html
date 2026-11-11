@@ -184,7 +184,7 @@ th { text-align: left; font: 600 10.5px/1 var(--mono); letter-spacing: 0.1em; te
 td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
 td.mono { font-family: var(--mono); font-size: 12.5px; }
 tr.nb td { color: var(--muted); text-decoration: line-through; }
-pre.csv { margin: 0; font: 400 12px/1.6 var(--mono); background: var(--paper); border: 1px solid var(--line); padding: 12px; overflow-x: auto; max-height: 220px; }
+pre.csv { margin: 0; font: 400 12.5px/1.65 var(--mono); background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--ink); padding: 16px 18px; overflow: auto; max-height: 460px; white-space: pre-wrap; overflow-wrap: anywhere; }
 input[type=range] { width: 100%; accent-color: var(--fiber); }
 .status { font-size: 13px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 10px; }
 .fmt { font-size: 13px; color: var(--muted); } .fmt summary { cursor: pointer; font-weight: 600; color: var(--ink); } .fmt p { margin-top: 8px; }
@@ -276,8 +276,9 @@ code { font: 400 12px/1.4 var(--mono); background: var(--paper); padding: 1px 4p
     <section class="panel">
       <div class="kicker">For the GIS team</div>
       <h2>Corrections file</h2>
-      <pre class="csv" id="csv"></pre>
-      <div class="row"><button type="button" id="copy">Copy as CSV</button><span class="note" id="copy-note"></span></div>
+      <p class="note">One block per correction, most urgent first: what the GIS says now, what to change it to, and what to do.</p>
+      <pre class="csv" id="fixes"></pre>
+      <div class="row"><button type="button" class="primary" id="copy">Copy as text</button><button type="button" id="copy-csv">Copy as CSV for import</button><span class="note" id="copy-note"></span></div>
     </section>
     <p class="note">A demonstration on a made-up project. The notes, the inventory and every name in them are synthetic. The records shown at first are the answer key I wrote by hand; with Claude available, the page reads the notes live and scores the result against that key. You can also load your own notes, records and inventory. The comparison itself uses fixed rules and no model.</p>
   </main>
@@ -297,7 +298,7 @@ const NS = "http://www.w3.org/2000/svg";
 function S(tag, attrs, text) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text !== undefined) e.textContent = text; return e; }
 const SEV = { high: "#ff5a52", medium: "#e3b53a", low: "#8fb3c9" };
 const worst = (fs) => fs.length ? fs.slice().sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])[0].severity : null;
-let records = REFERENCE, inventory = SAMPLE_INVENTORY, hasClaude = false, firstDraw = true;
+let csvText = "", records = REFERENCE, inventory = SAMPLE_INVENTORY, hasClaude = false, firstDraw = true;
 
 function drawLine(rec, result) {
   const g = $("strip-g"); g.replaceChildren();
@@ -431,8 +432,9 @@ function render() {
     (records.splices || []).map((s) => [s.closure_id, s.structure, rng(s.backbone_fibers), s.branch_cable, rng(s.branch_fibers)]));
 
   const q = (v) => { const t = String(v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
-  $("csv").textContent = ["n,severity,record,field,inventory_value,asbuilt_value,action"].concat(
+  csvText = ["n,severity,record,field,inventory_value,asbuilt_value,action"].concat(
     result.findings.map((f) => [f.n, f.severity, f.record, f.field, f.inventory, f.asbuilt, f.fix].map(q).join(","))).join("\n");
+  $("fixes").textContent = correctionsText(result, records.project);
 }
 
 function setStatus(text, cls) { const s = $("status"); s.textContent = text; s.className = "status" + (cls ? " " + cls : ""); }
@@ -562,10 +564,12 @@ function init() {
   wireUploads();
   $("tol").addEventListener("input", render);
   $("controls").addEventListener("submit", (e) => e.preventDefault());
-  $("copy").addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText($("csv").textContent); $("copy-note").textContent = "Copied."; }
+  const copyOut = async (text, what) => {
+    try { await navigator.clipboard.writeText(text); $("copy-note").textContent = what + " copied."; }
     catch (e) { $("copy-note").textContent = "Copy was blocked. Select the text and copy it by hand."; }
-  });
+  };
+  $("copy").addEventListener("click", () => copyOut($("fixes").textContent, "Text"));
+  $("copy-csv").addEventListener("click", () => copyOut(csvText, "CSV"));
   render();
   lightUpClaude();
 }

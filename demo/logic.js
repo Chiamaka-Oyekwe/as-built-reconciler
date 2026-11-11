@@ -144,4 +144,19 @@ function score(extracted, reference) {
     field_accuracy: total ? Math.round((correct / total) * 10000) / 10000 : 1, misses_count: misses.length };
 }
 
-if (typeof module !== "undefined") module.exports = { reconcile, score, norm };
+function correctionsText(result, project) {
+  const c = result.counts, rule = "=".repeat(64), n = result.findings.length;
+  const lines = ["CORRECTIONS FOR GIS", project ? `Project ${project}` : "Project not named",
+    `${n} correction${n === 1 ? "" : "s"}: ${c.high} high, ${c.medium} medium, ${c.low} low`, rule];
+  for (const sev of ["high", "medium", "low"]) {
+    const group = result.findings.filter((f) => f.severity === sev);
+    if (!group.length) continue;
+    lines.push("", `${sev.toUpperCase()} PRIORITY`, "-".repeat(64));
+    for (const f of group) lines.push(`${f.n}. ${f.record}`, `   Field      | ${f.field}`, `   GIS now    | ${f.inventory}`, `   Change to  | ${f.asbuilt}`, `   Action     | ${f.fix}`, "");
+  }
+  if (!n) lines.push("", "Nothing to correct. The inventory agrees with the as-built records.", "");
+  lines.push(rule, "End of corrections");
+  return lines.join("\n") + "\n";
+}
+
+if (typeof module !== "undefined") module.exports = { reconcile, score, norm, correctionsText };

@@ -1,7 +1,7 @@
 """Command line entry point.
 
     python -m reconciler.cli reconcile examples/asbuilt_FX-2231.reference.json \\
-        examples/inventory_FX-2231.geojson --splices examples/inventory_splices_FX-2231.csv
+        examples/inventory_FX-2231.geojson --splices examples/inventory_splices_FX-2231.csv --txt corrections.txt
     python -m reconciler.cli extract examples/asbuilt_FX-2231.pdf > records.json
     python -m reconciler.cli evaluate records.json examples/asbuilt_FX-2231.reference.json
 """
@@ -16,13 +16,16 @@ from .evaluate import score
 from .extract import extract, read_source
 from .inventory import load_inventory
 from .reconcile import reconcile
-from .report import corrections_csv, text_report
+from .report import corrections_csv, corrections_text, text_report
 
 
 def cmd_reconcile(a) -> int:
     asbuilt = json.loads(Path(a.asbuilt).read_text())
     result = reconcile(asbuilt, load_inventory(a.inventory, a.splices), a.tolerance / 100)
     print(text_report(result))
+    if a.txt:
+        Path(a.txt).write_text(corrections_text(result, asbuilt.get("project")))
+        print(f"\nCorrections written to {a.txt}")
     if a.csv:
         Path(a.csv).write_text(corrections_csv(result))
         print(f"\nCorrections written to {a.csv}")
@@ -50,7 +53,8 @@ def main(argv=None) -> int:
     r = sub.add_parser("reconcile", help="list disagreements between as-built records and inventory")
     r.add_argument("asbuilt"); r.add_argument("inventory"); r.add_argument("--splices")
     r.add_argument("--tolerance", type=float, default=5.0, help="allowed length difference, percent (default 5)")
-    r.add_argument("--csv", help="write a corrections file for the GIS team")
+    r.add_argument("--txt", help="write the corrections as plain text for the GIS team to read")
+    r.add_argument("--csv", help="write the corrections as CSV for import")
     r.set_defaults(func=cmd_reconcile)
     e = sub.add_parser("extract", help="read notes (.txt or .pdf) into records with Claude")
     e.add_argument("source"); e.set_defaults(func=cmd_extract)

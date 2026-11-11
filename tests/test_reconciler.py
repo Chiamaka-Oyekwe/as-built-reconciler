@@ -10,7 +10,7 @@ from reconciler import extract
 from reconciler.evaluate import score
 from reconciler.inventory import load_inventory
 from reconciler.reconcile import reconcile
-from reconciler.report import corrections_csv, text_report
+from reconciler.report import corrections_csv, corrections_text, text_report
 
 ROOT = Path(__file__).resolve().parent.parent
 EX = ROOT / "examples"
@@ -103,6 +103,16 @@ def test_validation_catches_bad_shapes():
     assert "needs both endpoints" in p and "unknown placement" in p and "whole number" in p and "backbone_fibers must be" in p
 
 
+def test_corrections_text_reads_top_to_bottom(asbuilt, inventory):
+    text = corrections_text(reconcile(asbuilt, inventory), "FX-2231")
+    assert text.startswith("CORRECTIONS FOR GIS\nProject FX-2231\n10 corrections: 5 high, 4 medium, 1 low\n")
+    assert text.index("HIGH PRIORITY") < text.index("MEDIUM PRIORITY") < text.index("LOW PRIORITY")
+    assert "1. L-03 HH-103 to BLDG-300\n   Field      | fiber_count\n   GIS now    | 12\n   Change to  | 24\n   Action     | Set fiber_count to 24" in text
+    assert text.rstrip().endswith("End of corrections")
+    same = {"cables": [], "splices": []}
+    assert "Nothing to correct" in corrections_text(reconcile(same, same))
+
+
 class FakeClient:
     """Stands in for the Anthropic client so tests need no API key."""
     def __init__(self, text):
@@ -144,7 +154,7 @@ def test_score_counts_wrong_fields_missing_and_invented_records(asbuilt):
 NODE = """
 const L = require(process.argv[1]);
 const {cases} = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-console.log(JSON.stringify(cases.map(c => ({r: L.reconcile(c.a, c.i, c.t), s: L.score(c.a, c.ref)}))));
+console.log(JSON.stringify(cases.map(c => { const r = L.reconcile(c.a, c.i, c.t); return {r, s: L.score(c.a, c.ref), t: L.correctionsText(r, c.a.project)}; })));
 """
 
 
@@ -161,6 +171,7 @@ def test_javascript_and_python_agree(asbuilt, inventory):
     for case, js in zip(cases, json.loads(run.stdout)):
         py = reconcile(case["a"], case["i"], case["t"])
         assert js["r"] == json.loads(json.dumps(py))
+        assert js["t"] == corrections_text(py, case["a"].get("project"))
         ps = score(case["a"], case["ref"])
         for k in ("records_expected", "records_found", "records_extra", "fields_correct", "fields_total", "field_accuracy"):
             assert js["s"][k] == ps[k]

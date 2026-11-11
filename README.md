@@ -45,10 +45,22 @@ On the sample project (made up, 10 cable records, 4 splices) it reports ten disa
 ```
 python -m reconciler.cli reconcile examples/asbuilt_FX-2231.reference.json \
     examples/inventory_FX-2231.geojson --splices examples/inventory_splices_FX-2231.csv \
-    --csv corrections.csv
+    --txt corrections.txt
 ```
 
-`corrections.csv` is the work list for whoever fixes the GIS: record, field, old value, new value, action.
+`corrections.txt` is the work list for whoever fixes the GIS, written to be read top to bottom:
+
+```
+HIGH PRIORITY
+----------------------------------------------------------------
+1. L-03 HH-103 to BLDG-300
+   Field      | fiber_count
+   GIS now    | 12
+   Change to  | 24
+   Action     | Set fiber_count to 24 and add the new strands to the fiber records.
+```
+
+Add `--csv corrections.csv` for the same list as a spreadsheet import.
 
 ## Use your own data
 
@@ -106,7 +118,7 @@ pip install pytest pypdf
 python -m pytest
 ```
 
-Seventeen tests. One runs the browser version of the rules in Node and checks it returns the same findings as the Python, so the demo cannot drift from the tool.
+Eighteen tests. One runs the browser version of the rules in Node and checks it returns the same findings as the Python, so the demo cannot drift from the tool.
 
 ## Layout
 

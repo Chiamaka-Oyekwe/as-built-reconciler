@@ -14,6 +14,29 @@ def corrections_csv(result: dict) -> str:
     return out.getvalue()
 
 
+def corrections_text(result: dict, project: str | None = None) -> str:
+    """The same corrections as plain text a person can read top to bottom."""
+    c, rule = result["counts"], "=" * 64
+    n = len(result["findings"])
+    lines = ["CORRECTIONS FOR GIS", f"Project {project}" if project else "Project not named",
+             f"{n} correction{'' if n == 1 else 's'}: {c['high']} high, {c['medium']} medium, {c['low']} low", rule]
+    for sev in ("high", "medium", "low"):
+        group = [f for f in result["findings"] if f["severity"] == sev]
+        if not group:
+            continue
+        lines += ["", f"{sev.upper()} PRIORITY", "-" * 64]
+        for f in group:
+            lines += [f"{f['n']}. {f['record']}",
+                      f"   Field      | {f['field']}",
+                      f"   GIS now    | {f['inventory']}",
+                      f"   Change to  | {f['asbuilt']}",
+                      f"   Action     | {f['fix']}", ""]
+    if not n:
+        lines += ["", "Nothing to correct. The inventory agrees with the as-built records.", ""]
+    lines += [rule, "End of corrections"]
+    return "\n".join(lines) + "\n"
+
+
 def text_report(result: dict) -> str:
     c = result["counts"]
     lines = [f"{len(result['findings'])} findings: {c['high']} high, {c['medium']} medium, {c['low']} low",
