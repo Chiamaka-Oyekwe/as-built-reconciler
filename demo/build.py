@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 from reconciler.extract import PROMPT  # noqa: E402
 from reconciler.inventory import load_inventory  # noqa: E402
 
-REPO = "https://github.com/tochoby/as-built-reconciler"
+REPO = "https://github.com/Chiamaka-Oyekwe/as-built-reconciler"
 ex = ROOT / "examples"
 js = lambda v: json.dumps(v).replace("</", "<\\/")
 html = (HERE / "template.html").read_text()

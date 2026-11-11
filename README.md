@@ -6,7 +6,7 @@ Months later someone assigns a circuit to fibers the inventory says are free at 
 
 This tool reads the closeout notes, compares every cable and splice with the GIS inventory, and lists what disagrees, worst first, with the fix for each.
 
-**Live demo:** https://tochoby.github.io/as-built-reconciler/ (opens for anyone, no account needed)
+**Live demo:** https://chiamaka-oyekwe.github.io/as-built-reconciler/ (opens for anyone, no account needed)
 
 The same page [on Claude](https://claude.ai/artifact/KvfLeS7NAbcYVB5KUyu65i) adds live reading of the notes by AI for signed-in viewers. On the GitHub page, the records shown are the hand-made answer key, or your own records file.
 
