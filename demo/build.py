@@ -21,6 +21,7 @@ html = html.replace("/*__LOGIC__*/", (HERE / "logic.js").read_text().split("if (
 html = html.replace("/*__PDFJS__*/", js({
     "lib": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
     "worker": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"}))
+html = html.replace("/*__JSZIP__*/", js("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"))
 html = html.replace("/*__REPO__*/", REPO)
 (HERE / "index.html").write_text(html)
 print(f"wrote demo/index.html ({len(html):,} bytes)")

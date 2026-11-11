@@ -187,6 +187,12 @@ tr.nb td { color: var(--muted); text-decoration: line-through; }
 pre.csv { margin: 0; font: 400 12.5px/1.65 var(--mono); background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--ink); padding: 16px 18px; overflow: auto; max-height: 460px; white-space: pre-wrap; overflow-wrap: anywhere; }
 input[type=range] { width: 100%; accent-color: var(--fiber); }
 .status { font-size: 13px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 10px; }
+.mapper { display: grid; gap: 8px; border: 1px solid var(--line); border-left: 4px solid var(--fiber); border-radius: 0 3px 3px 0; padding: 12px; background: var(--paper); }
+.mapper[hidden] { display: none; }
+#map-rows { display: grid; gap: 7px; }
+.maprow { display: grid; grid-template-columns: 112px 1fr; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.maprow select { background: var(--sheet); padding: 6px 7px; font-size: 13px; }
+.maprow.need span::after { content: " *"; color: var(--bad); }
 .fmt { font-size: 13px; color: var(--muted); } .fmt summary { cursor: pointer; font-weight: 600; color: var(--ink); } .fmt p { margin-top: 8px; }
 code { font: 400 12px/1.4 var(--mono); background: var(--paper); padding: 1px 4px; border-radius: 2px; }
 .status.live { border-left-color: var(--good); color: var(--ink); } .status.err { border-left-color: var(--bad); color: var(--ink); }
@@ -247,17 +253,23 @@ code { font: 400 12px/1.4 var(--mono); background: var(--paper); padding: 1px 4p
     </label>
     <div class="drop" id="drop-inv">
       <b>Drop your GIS inventory here</b>
-      <span>Cables as .geojson and splices as .csv. Drop both at once or one at a time.</span>
+      <span>Cables as a zipped shapefile, .kml, .kmz, .geojson or .csv. Splices as .csv. Drop them together or one at a time.</span>
       <div class="row">
         <button type="button" id="pick-inv">Choose files</button>
         <button type="button" id="reset-all" hidden>Back to the sample project</button>
       </div>
-      <input type="file" id="inv-input" accept=".geojson,.json,.csv,application/json,text/csv" multiple hidden>
+      <input type="file" id="inv-input" accept=".zip,.kml,.kmz,.geojson,.json,.csv" multiple hidden>
     </div>
     <p class="status" id="inv-note"></p>
+    <div class="mapper" id="mapper" hidden>
+      <b>Match your columns</b>
+      <span class="note">I guessed where I could. Fix any that are wrong.</span>
+      <div id="map-rows"></div>
+    </div>
     <details class="fmt">
       <summary>File formats</summary>
-      <p><b>Cables (.geojson):</b> one feature per span, with properties <code>cable_id</code>, <code>fiber_count</code>, <code>from_struct</code>, <code>to_struct</code>, <code>length_ft</code>, <code>placement</code> (underground or aerial).</p>
+      <p><b>Cables:</b> one line per span. A shapefile goes in as a <code>.zip</code> holding the <code>.shp</code> and <code>.dbf</code> (add the <code>.prj</code> if you have it). A <code>.kml</code> or <code>.kmz</code> needs attributes inside it; one drawn by hand in Google Earth has only names. Any column names work: you match them after loading.</p>
+      <p><b>Needed:</b> cable ID and the structure at each end. <b>Compared when present:</b> fiber count, length in feet, placement. With no length column, length can be measured from the line.</p>
       <p><b>Splices (.csv):</b> columns <code>closure_id, structure, backbone_cable, bb_start, bb_end, branch_cable, br_start, br_end</code>.</p>
       <p><b>Records (.json):</b> what the <code>extract</code> command writes. Sample files are in the repository's examples folder.</p>
     </details>
@@ -289,6 +301,7 @@ const NOTES = /*__NOTES__*/;
 const REFERENCE = /*__REFERENCE__*/;
 const SAMPLE_INVENTORY = /*__INVENTORY__*/;
 const PDFJS = /*__PDFJS__*/;
+const JSZIP_URL = /*__JSZIP__*/;
 const PROMPT = /*__PROMPT__*/;
 /*__LOGIC__*/
 
@@ -486,15 +499,172 @@ function parseCsv(text) {
   row.push(cell); if (row.some((c) => c.trim())) rows.push(row);
   return rows;
 }
-function cablesFromGeojson(text) {
+const FT_PER_M = 3.280839895;
+function haversineFt(a, b) {
+  const R = 20902231, t = Math.PI / 180, dLat = (b[1] - a[1]) * t, dLon = (b[0] - a[0]) * t;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * t) * Math.cos(b[1] * t) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const pathFt = (pts, geo, unit) => { let d = 0; for (let k = 1; k < pts.length; k++) d += geo ? haversineFt(pts[k - 1], pts[k]) : Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]) * unit; return d; };
+
+async function unzip(file) {
+  if (!window.JSZip) await loadScript(JSZIP_URL);
+  return window.JSZip.loadAsync(await file.arrayBuffer());
+}
+function parseDbf(buf) {
+  const v = new DataView(buf), n = v.getUint32(4, true), headLen = v.getUint16(8, true), recLen = v.getUint16(10, true), dec = new TextDecoder("utf-8"), fields = [];
+  for (let o = 32; o < headLen - 1 && v.getUint8(o) !== 0x0d; o += 32) {
+    let name = ""; for (let k = 0; k < 11; k++) { const ch = v.getUint8(o + k); if (!ch) break; name += String.fromCharCode(ch); }
+    fields.push({ name: name.trim(), type: String.fromCharCode(v.getUint8(o + 11)), len: v.getUint8(o + 16) });
+  }
+  const rows = [];
+  for (let r = 0; r < n; r++) {
+    let o = headLen + r * recLen; if (o + recLen > buf.byteLength) break;
+    const deleted = v.getUint8(o) === 0x2a; o += 1; const row = {};
+    for (const f of fields) {
+      const raw = dec.decode(new Uint8Array(buf, o, f.len)).trim(); o += f.len;
+      row[f.name] = raw === "" ? null : (f.type === "N" || f.type === "F") && !isNaN(Number(raw)) ? Number(raw) : raw;
+    }
+    rows.push(deleted ? null : row);
+  }
+  return { fields: fields.map((f) => f.name), rows };
+}
+function parseShpLines(buf) {
+  const v = new DataView(buf), out = []; let o = 100;
+  while (o + 8 <= buf.byteLength) {
+    const words = v.getInt32(o + 4, false), c = o + 8; o = c + words * 2;
+    const type = v.getInt32(c, true);
+    if (![3, 13, 23].includes(type)) { out.push(null); continue; }
+    const parts = v.getInt32(c + 36, true), pts = v.getInt32(c + 40, true), idx = [];
+    for (let k = 0; k < parts; k++) idx.push(v.getInt32(c + 44 + 4 * k, true));
+    idx.push(pts); const base = c + 44 + 4 * parts, lines = [];
+    for (let k = 0; k < parts; k++) { const line = []; for (let q = idx[k]; q < idx[k + 1]; q++) line.push([v.getFloat64(base + 16 * q, true), v.getFloat64(base + 16 * q + 8, true)]); lines.push(line); }
+    out.push(lines);
+  }
+  return out;
+}
+async function sourceFromShapeZip(file) {
+  const zip = await unzip(file), names = Object.keys(zip.files), pick = (ext) => names.find((n) => n.toLowerCase().endsWith(ext) && !n.startsWith("__MACOSX"));
+  const dbfName = pick(".dbf"), shpName = pick(".shp"), prjName = pick(".prj");
+  if (!dbfName) throw new Error("the zip has no .dbf file, which is where a shapefile keeps its attributes");
+  const dbf = parseDbf(await zip.file(dbfName).async("arraybuffer"));
+  let geomFt = null, note = "";
+  if (shpName) {
+    const shapes = parseShpLines(await zip.file(shpName).async("arraybuffer")), prj = prjName ? await zip.file(prjName).async("string") : "";
+    const flat = shapes.filter(Boolean).flat(2), looksGeo = flat.length > 0 && flat.every((p) => Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90);
+    const geo = prj ? !/PROJCS/i.test(prj) : looksGeo;
+    const units = prj.match(/UNIT\["([^"]+)"/gi) || [], last = (units[units.length - 1] || "").toLowerCase();
+    const unit = geo ? 1 : /f(oo|ee)t/.test(last) ? 1 : /met/.test(last) ? FT_PER_M : 1;
+    if (!prj) note = geo ? " No .prj in the zip, so I treated coordinates as longitude and latitude." : " No .prj in the zip, so I treated coordinates as feet.";
+    geomFt = shapes.map((s) => (s ? s.reduce((d, line) => d + pathFt(line, geo, unit), 0) : null));
+  }
+  const keep = dbf.rows.map((r, k) => [r, geomFt ? geomFt[k] : null]).filter(([r]) => r);
+  return { name: file.name, fields: dbf.fields, rows: keep.map(([r]) => r), geomFt: geomFt ? keep.map(([, g]) => g) : null, note };
+}
+function sourceFromKml(text, name) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("the KML could not be parsed");
+  const tags = (node, tag) => Array.from(node.getElementsByTagNameNS("*", tag));
+  const rows = [], geomFt = [], fields = [];
+  const note = (k) => { if (!fields.includes(k)) fields.push(k); };
+  for (const pm of tags(doc, "Placemark")) {
+    const lines = tags(pm, "LineString"); if (!lines.length) continue;
+    const row = {}; const nm = tags(pm, "name")[0]; if (nm) { row.name = nm.textContent.trim(); note("name"); }
+    for (const d of tags(pm, "Data")) { const v = tags(d, "value")[0]; const k = d.getAttribute("name"); if (k) { row[k] = v ? v.textContent.trim() : null; note(k); } }
+    for (const d of tags(pm, "SimpleData")) { const k = d.getAttribute("name"); if (k) { row[k] = d.textContent.trim(); note(k); } }
+    const desc = tags(pm, "description")[0];
+    if (desc && /<t[dr]/i.test(desc.textContent)) {
+      const html = new DOMParser().parseFromString(desc.textContent, "text/html");
+      html.querySelectorAll("tr").forEach((tr) => { const td = tr.querySelectorAll("td,th"); if (td.length === 2 && td[0].textContent.trim()) { const k = td[0].textContent.trim(); if (!(k in row)) { row[k] = td[1].textContent.trim(); note(k); } } });
+    }
+    let ft = 0;
+    for (const ls of lines) { const c = tags(ls, "coordinates")[0]; if (!c) continue; const pts = c.textContent.trim().split(/\s+/).map((t) => t.split(",").map(Number)).filter((p) => p.length >= 2 && !p.some(isNaN)); ft += pathFt(pts, true, 1); }
+    rows.push(row); geomFt.push(ft);
+  }
+  if (!rows.length) throw new Error("no lines found in the KML (cables must be LineString placemarks)");
+  const thin = fields.length <= 1 ? " This file carries names only, with no attribute columns, so there is little to compare." : "";
+  return { name, fields, rows, geomFt, note: thin };
+}
+function sourceFromGeojson(text, name) {
   const data = JSON.parse(text);
   if (!data || !Array.isArray(data.features)) throw new Error("not a GeoJSON feature collection");
-  const cables = data.features.map((f) => f.properties || {}).filter((p) => p.layer === "cable" || (p.layer === undefined && p.cable_id))
-    .map((p) => ({ cable_id: p.cable_id, fiber_count: p.fiber_count ?? null, from: p.from_struct ?? null, to: p.to_struct ?? null, length_ft: p.length_ft ?? null, placement: p.placement ?? null }));
-  if (!cables.length) throw new Error("no cable features found (each needs a cable_id property)");
-  const bad = cables.find((c) => !c.cable_id || !c.from || !c.to);
-  if (bad) throw new Error("a cable is missing cable_id, from_struct or to_struct");
-  return cables;
+  let feats = data.features.filter((f) => f && f.properties);
+  if (feats.some((f) => f.properties.layer !== undefined)) feats = feats.filter((f) => f.properties.layer === "cable");
+  else feats = feats.filter((f) => !f.geometry || /LineString/.test(f.geometry.type));
+  if (!feats.length) throw new Error("no cable features found");
+  const fields = []; feats.forEach((f) => Object.keys(f.properties).forEach((k) => { if (!fields.includes(k)) fields.push(k); }));
+  const geomFt = feats.map((f) => { const g = f.geometry; if (!g) return null; const lines = g.type === "LineString" ? [g.coordinates] : g.type === "MultiLineString" ? g.coordinates : []; return lines.length ? lines.reduce((d, l) => d + pathFt(l, true, 1), 0) : null; });
+  return { name, fields, rows: feats.map((f) => f.properties), geomFt: geomFt.some((v) => v) ? geomFt : null, note: "" };
+}
+function sourceFromCsvRows(rows, name) {
+  const head = rows[0].map((h) => h.trim());
+  return { name, fields: head, rows: rows.slice(1).map((r) => Object.fromEntries(head.map((h, k) => [h, (r[k] || "").trim() || null]))), geomFt: null, note: "" };
+}
+
+const TARGETS = [
+  ["cable_id", "Cable ID", true, ["cableid", "cablename", "cblname", "cable", "sheathid", "segmentid", "name", "id"]],
+  ["fiber_count", "Fiber count", false, ["fibercount", "fibercnt", "numfibers", "strandcount", "strands", "fibers", "count", "size"]],
+  ["from", "From structure", true, ["fromstruct", "fromstructure", "fromid", "aend", "astruct", "alocation", "startstruct", "from", "start"]],
+  ["to", "To structure", true, ["tostruct", "tostructure", "toid", "zend", "zstruct", "zlocation", "endstruct", "to", "end"]],
+  ["length_ft", "Length (ft)", false, ["lengthft", "sheathft", "sheathlength", "footage", "measuredlength", "calclength", "length", "shapelength", "len"]],
+  ["placement", "Placement", false, ["placement", "placementtype", "installtype", "install", "construction", "method", "type"]],
+];
+const squash = (t) => String(t).toLowerCase().replace(/[^a-z0-9]/g, "");
+function guessMap(fields) {
+  const map = {}, taken = new Set();
+  for (const pass of ["exact", "contains"]) for (const [key, , , syn] of TARGETS) {
+    if (map[key]) continue;
+    let hit = null;
+    for (const s of syn) { hit = fields.find((f) => !taken.has(f) && (pass === "exact" ? squash(f) === s : s.length > 3 && squash(f).includes(s))); if (hit) break; }
+    if (hit) { map[key] = hit; taken.add(hit); }
+  }
+  return map;
+}
+let rawSource = null, fieldMap = {};
+function cablesFromSource() {
+  const miss = TARGETS.filter(([k, , req]) => req && !fieldMap[k]).map(([, label]) => label);
+  if (miss.length) throw new Error("pick the column for: " + miss.join(", "));
+  const val = (row, k) => (fieldMap[k] && fieldMap[k] !== "__geom" ? row[fieldMap[k]] : null);
+  const num = (v) => { if (v === null || v === undefined || v === "") return null; const m = String(v).replace(/,/g, "").match(/-?\d+(\.\d+)?/); return m ? Number(m[0]) : null; };
+  const place = (v) => { const t = String(v || "").toLowerCase(); return /aer|strand|pole|overhead/.test(t) ? "aerial" : /ug|under|bur|duct|conduit|bore|trench/.test(t) ? "underground" : null; };
+  const cables = rawSource.rows.map((row, k) => {
+    const fc = num(val(row, "fiber_count")), len = fieldMap.length_ft === "__geom" ? (rawSource.geomFt && rawSource.geomFt[k] ? Math.round(rawSource.geomFt[k]) : null) : num(val(row, "length_ft"));
+    const s = (v) => (v === null || v === undefined ? null : String(v).trim() || null);
+    return { cable_id: s(val(row, "cable_id")), fiber_count: fc === null ? null : Math.round(fc), from: s(val(row, "from")), to: s(val(row, "to")), length_ft: len, placement: place(val(row, "placement")) };
+  }).filter((c) => c.cable_id && c.from && c.to);
+  if (!cables.length) throw new Error("no rows have a cable ID and both ends with that column choice");
+  return { cables, skipped: rawSource.rows.length - cables.length };
+}
+function drawMapper() {
+  const box = $("map-rows"); box.replaceChildren(); $("mapper").hidden = !rawSource; if (!rawSource) return;
+  for (const [key, label, req] of TARGETS) {
+    const row = el("label", "maprow" + (req ? " need" : "")); row.append(el("span", "", label));
+    const sel = document.createElement("select"); sel.id = "map-" + key;
+    const opt = (v, t) => { const o = el("option", "", t); o.value = v; sel.append(o); };
+    opt("", req ? "Choose a column" : "Not in my file");
+    if (key === "length_ft" && rawSource.geomFt) opt("__geom", "Measure from the line");
+    rawSource.fields.forEach((f) => opt(f, f));
+    sel.value = fieldMap[key] || "";
+    sel.addEventListener("change", () => { fieldMap[key] = sel.value; applySource(); });
+    row.append(sel); box.append(row);
+  }
+}
+function applySource() {
+  try {
+    const { cables, skipped } = cablesFromSource();
+    inventory = { cables, splices: pendingSplices || (inventory === SAMPLE_INVENTORY ? [] : inventory.splices) };
+    $("reset-all").hidden = false;
+    invNote("Your inventory from " + rawSource.name + ": " + cables.length + " cable records and " + inventory.splices.length + " splice records." +
+      (skipped ? " " + skipped + " rows skipped for a missing ID or end." : "") + (fieldMap.length_ft === "__geom" ? " Lengths are measured from the lines." : "") + (rawSource.note || ""), "live");
+    render();
+  } catch (err) { invNote("Almost there: " + err.message + "." + (rawSource.note || "") + " The previous inventory is still in use.", "err"); }
+}
+async function readCableSource(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".zip")) return sourceFromShapeZip(file);
+  if (name.endsWith(".kmz")) { const zip = await unzip(file), k = Object.keys(zip.files).find((n) => n.toLowerCase().endsWith(".kml")); if (!k) throw new Error("the .kmz has no .kml inside"); return sourceFromKml(await zip.file(k).async("string"), file.name); }
+  if (name.endsWith(".kml")) return sourceFromKml(await file.text(), file.name);
+  return sourceFromGeojson(await file.text(), file.name);
 }
 function splicesFromCsv(text) {
   const rows = parseCsv(text), need = ["closure_id", "structure", "backbone_cable", "bb_start", "bb_end", "branch_cable", "br_start", "br_end"];
@@ -527,15 +697,19 @@ async function takeNotesFile(file) {
 }
 async function takeInventoryFiles(files) {
   try {
-    let next = inventory === SAMPLE_INVENTORY ? { cables: [], splices: [] } : { cables: inventory.cables, splices: inventory.splices };
+    let source = null;
     for (const file of files) {
-      const name = file.name.toLowerCase(), text = await file.text();
-      if (name.endsWith(".csv")) next.splices = splicesFromCsv(text);
-      else next.cables = cablesFromGeojson(text);
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        const text = await file.text(), rows = parseCsv(text);
+        if (!rows.length) throw new Error(file.name + " is empty");
+        if (rows[0].map((h) => h.trim().toLowerCase()).includes("bb_start")) pendingSplices = splicesFromCsv(text);
+        else source = sourceFromCsvRows(rows, file.name);
+      } else source = await readCableSource(file);
     }
-    if (!next.cables.length) { invNote("Splices loaded. Now add the cable .geojson; until then the sample inventory is still in use.", "err"); pendingSplices = next.splices; return; }
-    if (!next.splices.length && pendingSplices) next.splices = pendingSplices;
-    inventory = next; pendingSplices = null; $("reset-all").hidden = false; invNote(); render();
+    if (source) { rawSource = source; fieldMap = guessMap(source.fields); if (!fieldMap.length_ft && source.geomFt) fieldMap.length_ft = "__geom"; drawMapper(); applySource(); return; }
+    if (rawSource) { applySource(); return; }
+    if (inventory !== SAMPLE_INVENTORY) { inventory = { cables: inventory.cables, splices: pendingSplices }; invNote(); render(); return; }
+    invNote("Splices loaded (" + pendingSplices.length + "). Now add the cable file; until then the sample inventory is still in use.", "err");
   } catch (err) { invNote("Could not use that inventory: " + (err && err.message ? err.message : "unreadable file") + ". The previous inventory is still in use.", "err"); }
 }
 let pendingSplices = null;
@@ -552,7 +726,7 @@ function wireUploads() {
   $("pick-notes").addEventListener("click", () => $("notes-input").click());
   $("pick-inv").addEventListener("click", () => $("inv-input").click());
   $("reset-all").addEventListener("click", () => {
-    records = REFERENCE; inventory = SAMPLE_INVENTORY; pendingSplices = null; $("notes").value = NOTES;
+    records = REFERENCE; inventory = SAMPLE_INVENTORY; pendingSplices = null; rawSource = null; fieldMap = {}; drawMapper(); $("notes").value = NOTES;
     $("reset-all").hidden = true; $("useref").hidden = true; setStatus(KEY_MSG); invNote(); render();
   });
 }

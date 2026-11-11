@@ -67,11 +67,16 @@ Add `--csv corrections.csv` for the same list as a spreadsheet import.
 In the demo, drop files onto the page:
 
 - **As-built:** closeout notes as `.txt` or a text-based `.pdf`, or a records `.json` written by the `extract` command.
-- **Inventory:** cables as `.geojson` (properties `cable_id`, `fiber_count`, `from_struct`, `to_struct`, `length_ft`, `placement`) and splices as `.csv` (`closure_id, structure, backbone_cable, bb_start, bb_end, branch_cable, br_start, br_end`).
+- **Cable inventory:** a zipped shapefile (`.shp` + `.dbf`, with the `.prj` if you have it), `.kml`, `.kmz`, `.geojson` or `.csv`. Your column names do not have to match anything. After loading, the page guesses which column is the cable ID, fiber count, each end, length and placement, and you correct what it got wrong. With no length column it can measure length from the line.
+- **Splice inventory:** a `.csv` with `closure_id, structure, backbone_cable, bb_start, bb_end, branch_cable, br_start, br_end`.
+
+`examples/` has the sample inventory in three forms to try: `inventory_FX-2231.geojson`, `inventory_FX-2231_shp.zip` (columns named `CBL_NAME`, `STRANDS`, `A_END`, `Z_END`, `SHEATH_FT`, `INSTALL`) and `inventory_FX-2231.kml`.
+
+A KML or KMZ only works if it carries attributes. One drawn by hand in Google Earth has names and lines and nothing to compare.
 
 Files are read in the browser and are not stored. Notes are sent to Claude only when you press Extract. Do not load records you are not allowed to share.
 
-The same files work on the command line, as shown above.
+The command line reads GeoJSON and the splice CSV. Shapefile and KML are read by the demo page only, for now.
 
 ## Where the AI is, and where it isn't
 
@@ -124,7 +129,7 @@ Eighteen tests. One runs the browser version of the rules in Node and checks it 
 
 ```
 reconciler/   extract, evaluate, reconcile, report, inventory loader, CLI
-examples/     closeout notes (.txt and .pdf), answer key, GIS inventory (GeoJSON), splice table (CSV)
+examples/     closeout notes (.txt and .pdf), answer key, GIS inventory (GeoJSON, zipped shapefile, KML), splice table (CSV)
 demo/         browser version (build with: python demo/build.py)
 tests/
 ```
